@@ -27,7 +27,7 @@ private:
     VboIndexer mIndexer;
     
     //TO-DO: Add some methods to query for info 
-    static struct 
+    struct 
     {
         glm::vec4 min, max;
     } mInfo;
