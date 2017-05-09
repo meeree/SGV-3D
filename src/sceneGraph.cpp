@@ -1,20 +1,27 @@
 #include "sceneGraph.h"
 #include <glm/gtc/type_ptr.hpp>
 
-Mesh::Mesh (GLenum const& mode)
-    : Mesh({},mode) {}
+Mesh::Mesh (GLenum const& mode, GLuint const& index)
+    : Mesh({},mode, index) {}
 
-Mesh::Mesh (std::vector<Vertex> const& verts, GLenum const& mode)
-    : Mesh(verts, {}, mode) 
+Mesh::Mesh (std::vector<Vertex> const& verts, GLenum const& mode, GLuint const& index)
+    : Mesh(verts, {}, mode, index) 
 {
     mInfo.fPureVertexDraw = true;
 }
 
-Mesh::Mesh (std::vector<Vertex> const& verts, std::vector<unsigned> const& inds, GLenum const& mode)
-    : mVertices{verts}, mIndices{inds}, mMode{mode} {}
+//BADDDD
+#include "graphics2.h"
+Mesh::Mesh (std::vector<Vertex> const& verts, std::vector<unsigned> const& inds, GLenum const& mode, GLuint const& index)
+    : mVertices{verts}, mIndices{inds}, mMode{mode}
+{
+    mInfo.meshIndex = {glGetUniformLocation(g.getShaderProgram(), "meshIndex"), index};
+}
 
 void Mesh::setLocalMinMax (std::vector<Vertex>::const_iterator begin, std::vector<Vertex>::const_iterator end)
 {
+    mInfo.min = {FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX};
+    mInfo.max = {FLT_MIN, FLT_MIN, FLT_MIN, FLT_MIN};
     for (; begin != end; begin++)
     {
         Vertex const& vert{*begin};
@@ -25,11 +32,11 @@ void Mesh::setLocalMinMax (std::vector<Vertex>::const_iterator begin, std::vecto
             else if (vert.pos[coord] > mInfo.max[coord])
                 mInfo.max[coord] = vert.pos[coord];
         }
-        GLfloat len{length(vert.pos)};
-        if (len < mInfo.min[4])
-            mInfo.min[4] = len;
-        if (len > mInfo.max[4])
-            mInfo.max[4] = len;
+//        GLfloat len{(GLfloat)pow(pow(vert.pos.x,2)+pow(vert.pos.y,2)+pow(vert.pos.z,2),0.5f)};
+//        if (len < mInfo.min[4])
+//            mInfo.min[4] = len;
+//        if (len > mInfo.max[4])
+//            mInfo.max[4] = len;
     }
 }
 
@@ -42,10 +49,12 @@ TransformNode::TransformNode (glm::mat4x4 const& modMat, eType const& type)
 StandardNode::StandardNode (GraphMesh const& mesh, glm::mat4x4 const& modMat)
     : mGraphMesh{mesh}, TransformNode(modMat, eType::STANDARD) {}
 
-void Node::render (glm::mat4x4& modMat, GraphQuery const& query) const
+void Node::render (glm::mat4x4 const& modMat, GraphQuery const& query) const
 {
-    intermediate(modMat, query);
-    for (auto const& child: mChildren) {child->render(modMat, query);}
+    for (auto const& child: mChildren) 
+    {
+        child->render(modMat, query);
+    }
 }
 
 Node::~Node ()
@@ -53,23 +62,27 @@ Node::~Node ()
     for (auto& child: mChildren) {delete(child);}
 }
 
-void TransformNode::intermediate (glm::mat4x4& modMat, GraphQuery const&) const
+#include <GLFW/glfw3.h>
+#define GLM_FORCE_RADIANS
+#include <glm/ext.hpp>
+
+void TransformNode::render(glm::mat4x4 const& modMat, GraphQuery const& query) const
 {
-    modMat = modMat*mModMat;
+    Node::render(modMat*glm::rotate((GLfloat)glfwGetTime(), glm::vec3(0.0f,1.0f,0.0f)), query);
 }
 
-void StandardNode::intermediate (glm::mat4x4& modMat, GraphQuery const& query) const
+void StandardNode::render (glm::mat4x4 const& modMat, GraphQuery const& query) const
 {
-    modMat = modMat*mModMat;
     MeshQuery meshInfo{mGraphMesh.getQuery()};
     if (meshInfo.fDrawQuery)
     {
-//        glUniformMatrix4fv(query.matLoc, 1, GL_FALSE, glm::value_ptr(modMat));
-        glUniformMatrix4fv(4, 1, GL_FALSE, glm::value_ptr(glm::mat4x4(1.0f)));
+        glUniformMatrix4fv(query.matLoc, 1, GL_FALSE, glm::value_ptr(modMat*mModMat));
+        //IMPROVE ME
+        glUniform1ui(meshInfo.meshIndex.first, meshInfo.meshIndex.second);
         if (!query.fGlobalMinMax)
         {
-//            glUniform4fv(query.min.first, 1, glm::value_ptr(meshInfo.min));
-//            glUniform4fv(query.max.first, 1, glm::value_ptr(meshInfo.max));
+            glUniform4fv(query.min.first, 1, glm::value_ptr(meshInfo.min));
+            glUniform4fv(query.max.first, 1, glm::value_ptr(meshInfo.max));
         }
         Indexer indexer{mGraphMesh.getSigIndexer()};
         if (meshInfo.fPureVertexDraw)
@@ -78,6 +91,7 @@ void StandardNode::intermediate (glm::mat4x4& modMat, GraphQuery const& query) c
             glDrawElements(mGraphMesh.getMode(), indexer.count, 
                     GL_UNSIGNED_INT, (void*)(size_t)indexer.first);
     }
+    TransformNode::render(modMat, query);
 }
 
 SceneGraph::SceneGraph (Node* node, GLuint const& shaderProgram, bool const& useGlobalMinMax, GLchar const* names[3])
@@ -85,13 +99,15 @@ SceneGraph::SceneGraph (Node* node, GLuint const& shaderProgram, bool const& use
 {
     glGenBuffers(1, &mVbo);
     glGenBuffers(1, &mEbo);
+    glBindBuffer(GL_ARRAY_BUFFER, mVbo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mVbo);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, pos)));
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, normal)));
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
-    mInfo.min.first = glGetUniformLocation(shaderProgram, names[0]);
-    mInfo.max.first = glGetUniformLocation(shaderProgram, names[1]);
-    mInfo.matLoc = glGetUniformLocation(shaderProgram, names[2]);
+    mInfo.matLoc = glGetUniformLocation(shaderProgram, names[0]);
+    mInfo.min.first = glGetUniformLocation(shaderProgram, "mini");
+    mInfo.max.first = glGetUniformLocation(shaderProgram, "maxi");
     mInfo.fGlobalMinMax = useGlobalMinMax;
     setGlobalMinMax();
     //This could be redundent
@@ -118,10 +134,12 @@ void SceneGraph::setGlobalMinMax ()
     }
 }
 
-void SceneGraph::render (glm::mat4x4& modMat) const
+void SceneGraph::render (glm::mat4x4 modMat) const
 {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mEbo);
     glBindBuffer(GL_ARRAY_BUFFER, mVbo); 
+    glUniform4fv(mInfo.min.first, 1, glm::value_ptr(mInfo.min.second));
+    glUniform4fv(mInfo.max.first, 1, glm::value_ptr(mInfo.max.second));
     mRoot->render(modMat, mInfo);
 }
 
@@ -146,7 +164,6 @@ GraphMesh SceneGraph::bindMesh(Mesh& mesh)
     GraphMesh graphMesh = std::move(static_cast<GraphMesh&>(mesh));
     graphMesh.setIndexers({{(GLuint)mVertices.size(), (GLsizei)graphMesh.mVertices.size()},
                            {(GLuint)mIndices.size(),  (GLsizei)graphMesh.mIndices.size()}});
-    std::cout<<graphMesh.getVboIndexer().count<<std::endl;
     mVertices.insert(mVertices.end(), 
                      std::make_move_iterator(graphMesh.mVertices.begin()), 
                      std::make_move_iterator(graphMesh.mVertices.end()));
@@ -198,4 +215,10 @@ void SceneGraph::cut (Node* node)
         mVertices.erase(vertStart, vertStart+region.first.count);
         mIndices.erase(indStart, indStart+region.second.count);
     }
+}
+
+void SceneGraph::setRoot (Node* node) 
+{
+    delete mRoot; 
+    mRoot = node;
 }

@@ -7,17 +7,24 @@
 #include <glm/glm.hpp>
 #include <algorithm>
 
+class Graphics;
+extern Graphics g;
+
 //TO-DO: Add overflow test in mergeGraph and other potentially big allocation methods
+//TO-DO: Add line drawing
 //TO-DO: Add methods to check if node data is bound to the scene graph the node is trying to join
 
 struct Vertex 
 {
-    glm::vec3 pos, normal;
+    glm::vec3 pos;
+    glm::vec3 normal;
 };
 
 struct MeshQuery 
 {
     glm::vec4 min, max; //Min and max local to the mesh
+    //GET A BETTER METHOD FOR ASSIGNING MESH INDICES
+    std::pair<GLint, GLuint> meshIndex;
     bool fDrawQuery, fPureVertexDraw;
 };
 
@@ -34,9 +41,9 @@ public:
     std::vector<unsigned> mIndices;
 
 	Mesh () = delete; //Accounted for below
-    Mesh (GLenum const& mode=GL_TRIANGLES);
-    Mesh (std::vector<Vertex> const&, GLenum const& mode=GL_TRIANGLES);
-    Mesh (std::vector<Vertex> const&, std::vector<unsigned> const&, GLenum const& mode=GL_TRIANGLES);
+    Mesh (GLenum const& mode=GL_TRIANGLES, GLuint const& index=-1);
+    Mesh (std::vector<Vertex> const&, GLenum const& mode=GL_TRIANGLES, GLuint const& meshIndex=-1);
+    Mesh (std::vector<Vertex> const&, std::vector<unsigned> const&, GLenum const& mode=GL_TRIANGLES, GLuint const& meshIndex=-1);
     //TO-DO: Add move versions
 //    Mesh (std::vector<Vertex>&&, std::vector<unsigned>&&);
     inline MeshQuery getQuery () const {return mInfo;}
@@ -78,11 +85,11 @@ public:
 //
 //Diagram:
 //             NODE/BRANCH NODE
-//                    |
-//              TRANSFORM NODE
-//                    |
-//            MESH/STANDARD NODE
-
+//             /               \
+//     DYNAMIC TRANS. NODE   TRANSFORM NODE
+//                                 |
+//                         MESH/STANDARD NODE
+            
 struct GraphQuery;
 
 class Node
@@ -90,62 +97,70 @@ class Node
 protected:
     enum eType 
     {
-        STANDARD=0, TRANSFORM=1, PURE_BRANCH=2
+        STANDARD=0, TRANSFORM=1, DYNAMIC_TRANSFORM=2, PURE_BRANCH=3
     } mType;
     std::vector<Node*> mChildren;
     Node* mParent;
-    virtual void intermediate (glm::mat4x4&, GraphQuery const&) const {};
 public:
     Node () = delete; //Accounted for below 
     Node (eType const& type=PURE_BRANCH);
     inline Node* getChild (unsigned const& index) const
         {return mChildren[index];}
-    void render (glm::mat4x4&, GraphQuery const&) const;
-    virtual void setLocalMinMax (
-            std::vector<Vertex> const&) {}
+    virtual void render (glm::mat4x4 const&, GraphQuery const&) const;
+    virtual void setLocalMinMax (std::vector<Vertex> const& verts) 
+        {for (auto& child: mChildren) {child->setLocalMinMax(verts);}}
     inline void addChild (Node* node) 
         {mChildren.push_back(node);}
     virtual void cut (std::vector<std::pair<Indexer,Indexer>>&) {}
     virtual ~Node ();
 };
 
+//class DynamicTransformNode : public Node 
+//{
+//protected:
+//    glm::mat4x4 (*mTransFunc)(double const&);
+//public:
+//    DynamicTransformNode();
+//    virtual void render (glm::mat4x4 const&, GraphQuery const&) const override;
+//};
+//
 class TransformNode : public Node 
 {
 protected:
     glm::mat4x4 mModMat;
-    virtual void intermediate (glm::mat4x4&, GraphQuery const&) const override;
 public:
     TransformNode () = default;
     TransformNode (glm::mat4x4 const& modMat, 
         eType const& type=TRANSFORM);
-//    void render(glm::mat4x4& modMat, GraphQuery const& query) const 
-//        {Node::render(modMat, query);}
+
+    inline void transform (glm::mat4x4 const& transform)
+        {mModMat = transform*mModMat;}
+    virtual void render (glm::mat4x4 const&, GraphQuery const&) const override;
 };
 
 class StandardNode : public TransformNode 
 {
 protected:
     GraphMesh mGraphMesh;
-    virtual void intermediate (glm::mat4x4&, GraphQuery const&) const override;
 public:
     StandardNode () = default;
     StandardNode (GraphMesh const& mesh, 
         glm::mat4x4 const& modMat=glm::mat4x4(1.0f));
     inline GraphMesh getGraphMesh () const {return mGraphMesh;}
+    //DEFINE ME
     Mesh getMesh () const; //Extract a stand-alone mesh from scene graph 
-    virtual void setLocalMinMax (std::vector<Vertex> const& verts) override
-        {mGraphMesh.setLocalMinMax(verts);}
+    virtual void setLocalMinMax (std::vector<Vertex> const& verts) final
+        {mGraphMesh.setLocalMinMax(verts); Node::setLocalMinMax(verts);}
     virtual void cut (std::vector<std::pair<Indexer,Indexer>>& regions) final
         {regions.push_back({mGraphMesh.getVboIndexer(), mGraphMesh.getEboIndexer()});}
-//    void render(glm::mat4x4& modMat, GraphQuery const& query) const 
-//        {TransformNode::render(modMat, query);}
     inline void toggleDraw () {mGraphMesh.toggleDraw();}
+    virtual void render (glm::mat4x4 const&, GraphQuery const&) const override;
 };
 
 struct GraphQuery
 {
     bool fGlobalMinMax;
-    std::pair<GLuint,glm::vec4> min, max;
+    std::pair<GLint,glm::vec4> min, max;
     GLuint matLoc;
 };
 
@@ -165,16 +180,18 @@ public:
             bool const& useGlobalMinMax=true, GLchar const* names[3] = (GLchar const* [3]){"min","max","modMat"});
     void setGlobalMinMax ();
     void setLocalMinMax () {mRoot->setLocalMinMax(mVertices);}
-    void render (glm::mat4x4& modMat) const;
+    inline void toggleGlobalMinMax () {mInfo.fGlobalMinMax = !mInfo.fGlobalMinMax;}
+    void render (glm::mat4x4) const;
     void mergeGraph (SceneGraph&, Node*); 
     GraphMesh bindMesh (Mesh&);
     Mesh unbindMesh (GraphMesh&);
     //This should be expanded 
     //FIX ME 
-    inline void setRoot (Node* node) 
-        {delete mRoot; mRoot = new StandardNode{*static_cast<StandardNode*>(node)};}
+    void setRoot (Node* node);
+    inline Node* getRoot () const {return mRoot;}
     void cut (Node*);
-    ~SceneGraph() {delete(mRoot);}
+    //FIX ME
+    ~SceneGraph() {}//delete(mRoot);}
 };
 
 #endif //__SCENE_GRAPH_H__

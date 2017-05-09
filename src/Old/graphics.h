@@ -58,7 +58,6 @@ public:
     void addSurface (float const&, std::vector<Vertex> const&);
     void scale (GLfloat const&);
     inline GLuint getShaderProgram () const {return mShaderProgram;}
-
     inline GLFWwindow* const& getWindow () const {return mWindow;};
 
     void mustUpdate ();
