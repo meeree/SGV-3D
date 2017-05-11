@@ -1,5 +1,5 @@
 #include "sceneGraph.h"
-#include "graphics2.h"
+#include "graphics.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/ext.hpp>
 
@@ -84,7 +84,6 @@ extern std::vector<Vertex> vertices;
 
 int main ()
 {
-//    g.setCam(glm::vec3(0,5,10), glm::vec3(0,-0.5,-1.0));
     g.setCam(glm::vec3(0,0,4.5), glm::vec3(0,0,-1));
     g.setCamTransforms(glm::perspective(glm::radians(45.0f),(GLfloat)1920/1080, 0.1f, 200.0f),
                        glm::mat4x4(1.0f));
@@ -96,57 +95,55 @@ int main ()
     glfwSetInputMode(g.getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetInputMode(g.getWindow(), GLFW_STICKY_KEYS, false);
 
-    //DRAW A CUBE WITH TWO SMALLER CUBES ATTACHED TO IT 
     GLuint shaderProgram = g.getShaderProgram();
     GLchar const* names [3]{"mMat","mini","maxi"};
-    SceneGraph sg {nullptr, shaderProgram, false, names}; 
-    glm::mat4x4 modMats[7]; 
-    modMats[0] = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.5f));
+    SceneGraph sg {nullptr, shaderProgram, true, names}; 
+    std::vector<glm::mat4x4> modMats{ 
+        glm::rotate(0.6f, glm::vec3(0.0f,1.0f,0.0f)),
 
-    modMats[1] = glm::rotate(0.6f, glm::vec3(0.0f,1.0f,0.0f));
+        glm::scale(glm::mat4x4(1.0f), glm::vec3(1.5f)),
+        glm::scale(glm::translate(glm::mat4x4(1.0f), glm::vec3(-13.0f,-13.0f,0.0f)), glm::vec3(1.2f)),
+        glm::scale(glm::translate(glm::mat4x4(1.0f), glm::vec3(13.0f,15.0f,0.0f)), glm::vec3(0.8f)),
 
-    modMats[2] = glm::scale(glm::translate(glm::mat4x4(1.0f), glm::vec3(-13.0f,-13.0f,0.0f)), glm::vec3(1.2f));
-    modMats[3] = glm::scale(glm::translate(glm::mat4x4(1.0f), glm::vec3(13.0f,15.0f,0.0f)), glm::vec3(0.8f));
+        glm::scale(glm::translate(glm::mat4x4(1.0f), glm::vec3(0,0,20)+glm::vec3(13.0f,15.0f,0.0f)), glm::vec3(0.5f)),
+        glm::scale(glm::translate(glm::mat4x4(1.0f), glm::vec3(0,0,20)+glm::vec3(13.0f,15.0f,0.0f)), glm::vec3(0.4f)),
+        glm::scale(glm::translate(glm::mat4x4(1.0f), glm::vec3(0,0,20)+glm::vec3(13.0f,15.0f,0.0f)), glm::vec3(0.8f))};
+//        glm::mat4x4(1.0f), glm::mat4x4(1.0f), glm::mat4x4(1.0f), glm::mat4x4(1.0f), glm::mat4x4(1.0f), glm::mat4x4(1.0f), glm::mat4x4(1.0f)};
 
-    modMats[4] = glm::scale(glm::translate(glm::mat4x4(1.0f), glm::vec3(0,0,20)+glm::vec3(13.0f,15.0f,0.0f)), glm::vec3(0.8f));
-    modMats[5] = glm::scale(glm::translate(glm::mat4x4(1.0f), glm::vec3(0,0,20)+glm::vec3(13.0f,15.0f,0.0f)), glm::vec3(0.8f));
-    modMats[6] = glm::scale(glm::translate(glm::mat4x4(1.0f), glm::vec3(0,0,20)+glm::vec3(13.0f,15.0f,0.0f)), glm::vec3(0.8f));
-    std::vector<Mesh> meshes{
-        {vertices, GL_TRIANGLES, 0}, {vertices, GL_TRIANGLES, 1}, {vertices, GL_TRIANGLES, 2},
-        {vertices, GL_TRIANGLES, 3}, {vertices, GL_TRIANGLES, 4}, {vertices, GL_TRIANGLES, 5}};
+    std::vector<Mesh> meshes(6, {vertices, GL_TRIANGLES});
+
     std::vector<GraphMesh> gmeshes;
     for (auto &mesh: meshes)
         gmeshes.push_back(sg.bindMesh(mesh));
-//    g.update(); 
-    std::vector<StandardNode> nodes{
-        {gmeshes[0], modMats[0]}, {gmeshes[1], modMats[2]}, {gmeshes[2], modMats[3]},
-        {gmeshes[3], modMats[4]}, {gmeshes[4], modMats[5]}, {gmeshes[5], modMats[6]}}; 
-    for (auto& node: nodes)
-        node.toggleDraw();
 
-    std::vector<TransformNode> tNodes{
-        {modMats[1]}, {modMats[1]}, {modMats[1]}};
+    std::vector<ObjectNode*> objectNodes (6);
+    std::transform(gmeshes.begin(), gmeshes.end(), objectNodes.begin(), [](GraphMesh const& gmesh){return new ObjectNode(gmesh);});
+    std::vector<TransformNode*> tNodes (modMats.size());
+    std::transform(modMats.begin(), modMats.end(), tNodes.begin(), [](glm::mat4x4 const& modMat){return new TransformNode(modMat);});
+    for (auto& objectNode: objectNodes)
+        objectNode->toggleDraw();
 
+    tNodes[0]->addChild(objectNodes[0]);
+    tNodes[0]->addChild(objectNodes[3]);
 
-    tNodes[0].addChild(&nodes[0]);
-    tNodes[0].addChild(&nodes[3]);
+    objectNodes[0]->addChild(tNodes[1]);
+    tNodes[1]->addChild(objectNodes[1]);
+    objectNodes[1]->addChild(tNodes[2]);
+    tNodes[2]->addChild(objectNodes[2]);
 
-    nodes[0].addChild(&tNodes[1]);
-    tNodes[1].addChild(&nodes[1]);
-    nodes[1].addChild(&nodes[2]);
+    objectNodes[3]->addChild(tNodes[4]);
+    tNodes[4]->addChild(objectNodes[4]);
+    objectNodes[4]->addChild(tNodes[5]);
+    tNodes[5]->addChild(objectNodes[5]);
 
-    nodes[3].addChild(&tNodes[2]);
-    tNodes[2].addChild(&nodes[4]);
-    nodes[4].addChild(&nodes[5]);
-    //FIX ME
-    sg.setRoot(&tNodes[0]);
-    //FIX ME
-    sg.setLocalMinMax();
+    sg.setRoot(tNodes[0]);
 
+    sg.setGlobalCenter();
+    sg.setGlobalMinMax();
     g.addGraph(sg);
     g.loop();
 }
-//
+
 //bool readFile (char const* flName, Grid& grid)
 //{
 //    std::ifstream fl;

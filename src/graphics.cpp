@@ -1,7 +1,8 @@
-#include "graphics2.h"
+#include "graphics.h"
 #include <fstream>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/ext.hpp>
+#include <iostream>
 
 GLuint Graphics::loadInShader(char const *fname, GLenum const &shaderType) 
 {
@@ -72,6 +73,8 @@ Graphics::Graphics (GLfloat const& width, GLfloat const& height, char const* ver
     mColorScheme.second = 0;
     mCamera.horiAngle = M_PI; 
     mCamera.vertAngle = 0.0;
+    mCamera.lookSpeed = 50.0f;
+    mCamera.moveSpeed = 1.0f;
     if(!glfwInit()) 
     {
         std::cerr<<"failed to initialize glfw"<<std::endl;
@@ -98,9 +101,6 @@ Graphics::Graphics (GLfloat const& width, GLfloat const& height, char const* ver
     setShaders(vertLoc, fragLoc);
     glUseProgram(mShaderProgram);
 
-    glGenVertexArrays(1, &mVao);
-    glBindVertexArray(mVao);
-
     //IMPROVE THIS
     mCamera.pos.first = glGetUniformLocation(mShaderProgram, "camPos");
     mCamera.dir.first = glGetUniformLocation(mShaderProgram, "camDir");
@@ -118,7 +118,7 @@ Graphics::Graphics (GLfloat const& width, GLfloat const& height, char const* ver
         std::cerr<<"Warning: scalar not active or present in shader. It should be named 'scalar'"<<std::endl;
 
 
-//    glUniform1ui(mColorScheme.first, mColorScheme.second);
+    glUniform1ui(mColorScheme.first, mColorScheme.second);
 //    glUniform3fv(mCamera.pos.first, 1, glm::value_ptr(mCamera.pos.second));
 //    glUniform3fv(mCamera.dir.first, 1, glm::value_ptr(mCamera.dir.second));
 //    glUniformMatrix4fv(mCamera.vMat.first, 1, GL_FALSE, glm::value_ptr(mCamera.vMat.second));
@@ -134,10 +134,8 @@ void Graphics::performTransforms ()
     double xpos, ypos;
     glfwGetCursorPos(mWindow, &xpos, &ypos);
     glfwSetCursorPos(mWindow, mWidth/2, mHeight/2);
-    //MOVE ME 
-    GLfloat speed = 50.0f;
-    mCamera.horiAngle += speed*(glfwGetTime()-t)*(mWidth/2-xpos);
-    mCamera.vertAngle += speed*(glfwGetTime()-t)*(mHeight/2-ypos);
+    mCamera.horiAngle += mCamera.lookSpeed*(glfwGetTime()-t)*(mWidth/2-xpos);
+    mCamera.vertAngle += mCamera.lookSpeed*(glfwGetTime()-t)*(mHeight/2-ypos);
 
     mCamera.dir.second = glm::vec3(
         cos(mCamera.vertAngle) * sin(mCamera.horiAngle),
@@ -151,29 +149,31 @@ void Graphics::performTransforms ()
     };
     glm::vec3 up = glm::cross(right, mCamera.dir.second);
     glm::vec3 moveVec{0.0f};
+    GLfloat  alteredMoveSpeed = glfwGetKey(mWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ? 
+                                mCamera.moveSpeed/2 : mCamera.moveSpeed;
     if (glfwGetKey(mWindow, GLFW_KEY_S) == GLFW_PRESS)
     {
-        moveVec -= 0.3f * mCamera.dir.second;
+        moveVec -= alteredMoveSpeed*mCamera.dir.second;
     }
     if (glfwGetKey(mWindow, GLFW_KEY_W) == GLFW_PRESS)
     {
-        moveVec += 0.3f * mCamera.dir.second;
+        moveVec += alteredMoveSpeed*mCamera.dir.second;
     }
     if (glfwGetKey(mWindow, GLFW_KEY_Q) == GLFW_PRESS)
     {
-        moveVec -= 0.3f * up;
+        moveVec -= alteredMoveSpeed*up;
     }
     if (glfwGetKey(mWindow, GLFW_KEY_E) == GLFW_PRESS)
     {
-        moveVec += 0.3f * up;
+        moveVec += alteredMoveSpeed*up;
     }
     if (glfwGetKey(mWindow, GLFW_KEY_A) == GLFW_PRESS)
     {
-        moveVec -= 0.3f * right;
+        moveVec -= alteredMoveSpeed*right;
     }
     if (glfwGetKey(mWindow, GLFW_KEY_D) == GLFW_PRESS)
     {
-        moveVec += 0.3f * right;
+        moveVec += alteredMoveSpeed*right;
     }
     if (length(moveVec) > FLT_EPSILON)
     {
@@ -197,18 +197,9 @@ void Graphics::render ()
     GLfloat const color [4] {0.0f, 0.0f, 0.0f, 1.0f};
     glClearBufferfv(GL_COLOR, 0.0f, color);
     glClear(GL_DEPTH_BUFFER_BIT);
-//    glm::mat4x4 mMat = glm::rotate((GLfloat)glfwGetTime(), glm::vec3(0,1,0));
-    GLfloat t = glfwGetTime();
-    GLfloat f = (GLfloat)t * (GLfloat)M_PI * 0.1f;
-    glm::mat4x4 mMat =
-        glm::translate(glm::vec3(sinf(2.1f * f) * 0.5f,
-                cosf(1.7f * f) * 0.5f,
-                sinf(1.3f * f) * cosf(1.5f * f) * 2.0f)) *
-        glm::rotate(glm::radians((GLfloat)t * 45.0f), glm::vec3(0.0f, 1.0f, 0.0f)) *
-        glm::rotate(glm::radians((GLfloat)t * 81.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-    for (auto const& graph: mGraphs)
+    for (auto& graph: mGraphs)
     {
-        graph.render(mMat);
+        graph.render(glm::mat4x4(1.0f));
     }
     glfwSwapBuffers(mWindow);
 }

@@ -12,7 +12,6 @@ layout (location=4) uniform mat4 mMat;
 layout (location=5) uniform float scalar;
 layout (location=6) uniform uint colorScheme;
 layout (location=7) uniform vec3 camPos;
-layout (location=8) uniform uint meshIndex;
 //layout (location=8) uniform bool lineDraw;
 //
 layout (location=11) uniform vec4 mini;
@@ -34,9 +33,8 @@ void main(void)
     vec4 col;
     if (colorScheme == 0)
     {
-        float k = 0.85+0.15*(length(fs_in.position)-mini.w)/(maxi.w-mini.w);
-//        col = 0.5*vec4(mix(mix(vec3(0.5451, 0.5137, 0.4706), vec3(0.5176, 0.3294, 0.1255), 2*min(k, 0.5)), vec3(0.3804, 0.8118, 0.0941), 2*(max(k, 0.5)-0.5)), 2.0);
-        col = meshIndex%3 == 0 ? vec4(k*vec3(0.6, 0.5, 0.5), 1.0) : meshIndex%3 == 1 ? vec4(k*vec3(0.45, 0.5, 0.5), 1.0) : vec4(k*vec3(0.5, 0.5, 0.5), 1.0);
+        float k = (length(fs_in.position)-mini.w)/(maxi.w-mini.w);
+        col = 0.5*vec4(mix(mix(vec3(0.5451, 0.5137, 0.4706), vec3(0.5176, 0.3294, 0.1255), 2*min(k, 0.5)), vec3(0.8804, 0.6118, 0.1941), 2*(max(k, 0.5)-0.5)), 2.0);
     }
 
 //    vec3 l = normalize(mat3(vMat*mMat)*(camPos*fs_in.position));
@@ -44,5 +42,5 @@ void main(void)
     float brightness1 = clamp(abs(dot(mat3(vMat*mMat)*fs_in.normal, l1)), 0.0, 1.0);
     vec3 l2 = normalize(mat3(vMat*mMat)*(vec3(10.0,0.0,0.0)-scalar*fs_in.position));
     float brightness2 = clamp(abs(dot(mat3(vMat*mMat)*fs_in.normal, l2)), 0.0, 1.0);
-    color = vec4((ambient + brightness1 * lightIntensities1 + brightness2 * lightIntensities2) * col.rgb, col.a);
+    color = vec4((ambient + brightness1 * lightIntensities1 + brightness2 * lightIntensities2) * col.rgb, col.a); 
 }

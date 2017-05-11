@@ -10,9 +10,7 @@
 class Graphics
 {
 private:
-
     std::vector<SceneGraph> mGraphs;
-    GLuint mVao;
     GLfloat mWidth, mHeight;
     GLuint mShaderProgram;
     GLFWwindow* mWindow;
@@ -23,6 +21,7 @@ private:
         std::pair<GLint, glm::mat3> pMat, vMat;
         std::pair<GLint, glm::vec3> pos, dir;
         double horiAngle, vertAngle;
+        GLfloat lookSpeed, moveSpeed;
     } mCamera; 
 
     //Keep custom uniforms in their own container with their locations 
@@ -44,7 +43,7 @@ public:
     void render ();
     void loop ();
 
-    //INLINE GETTER/SETTER STYLE FUNCTIONS 
+    //Getter/setter functions 
     inline void scale (GLfloat const& scaleFactor)
         {mScalar.second *= scaleFactor; 
          glUniform1f(mScalar.first, mScalar.second);}
@@ -63,6 +62,11 @@ public:
          mCamera.vertAngle = acos(glm::dot(glm::vec3(0.0f,1.0f,0.0f), mCamera.dir.second))-M_PI/2;
          glUniform3f(mCamera.pos.first, mCamera.pos.second.x, mCamera.pos.second.y, mCamera.pos.second.z);
          glUniform3f(mCamera.dir.first, mCamera.dir.second.x, mCamera.dir.second.y, mCamera.dir.second.z);}
+    inline void setCamSpeed (GLfloat const& lookSpeed, GLfloat const& moveSpeed)
+        {mCamera.lookSpeed = lookSpeed; 
+         mCamera.moveSpeed = moveSpeed;};
+    inline void incCamLookSpeed (GLfloat const& inc) {mCamera.lookSpeed += inc;}
+    inline void incCamMoveSpeed (GLfloat const& inc) {mCamera.moveSpeed += inc;}
     inline void moveCam (glm::vec3 const& inc) {mCamera.pos.second += inc;}
     inline void mustUpdate () {fUpdate = true;}
     inline void incColorSceme () 
