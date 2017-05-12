@@ -95,7 +95,8 @@ protected:
 public:
     Node ();
     virtual ~Node ();
-    virtual void render (glm::mat4x4 const&, SceneGraph*);
+
+    virtual void render (glm::mat4x4 const&, SceneGraph*, double const&);
     virtual void cut (std::vector<std::pair<Indexer,Indexer>>&) {}
 
     //Getter/setter functions 
@@ -106,15 +107,32 @@ public:
     inline std::vector<Node*> getChildren () const {return mChildren;}
 };
 
-//class DynamicTransformNode : public Node 
-//{
-//protected:
-//    glm::mat4x4 (*mTransFunc)(double const&);
-//public:
-//    DynamicTransformNode();
-//    virtual void render (glm::mat4x4 const&, SceneGraph*) override;
-//};
-//
+class DynamicTransformNode : public Node 
+{
+protected:
+    virtual glm::mat4x4 calculateTransform (double const&) = 0; 
+public:
+    DynamicTransformNode ();
+    virtual void render (glm::mat4x4 const&, SceneGraph*, double const&) override;
+};
+
+//Easy way for users to define a custom DynamicTransformNode with their own function
+class DynamicInputTransformNode : public DynamicTransformNode 
+{
+private:
+    glm::mat4x4 (*mTransCalc) (double const&);
+protected:
+    virtual glm::mat4x4 calculateTransform (double const& t) override final
+        {return (*mTransCalc)(t);}
+public:
+    DynamicInputTransformNode () = default;
+    DynamicInputTransformNode (glm::mat4x4 (*) (double const&));
+    
+    //Getter/setter functions 
+    inline void setTransformCalculator (glm::mat4x4 (*transCalc) (double const&)) 
+        {mTransCalc = transCalc;}
+};
+
 class TransformNode : public Node 
 {
 protected:
@@ -122,7 +140,7 @@ protected:
 public:
     TransformNode ();
     TransformNode (glm::mat4x4 const& modMat);
-    virtual void render (glm::mat4x4 const&, SceneGraph*) override;
+    virtual void render (glm::mat4x4 const&, SceneGraph*, double const&) override;
 
     //Getter/setter functions 
     inline void transform (glm::mat4x4 const& transform) {mModMat = transform*mModMat;}
@@ -138,7 +156,7 @@ public:
     ObjectNode ();
     ObjectNode (GraphMesh const&);
     //DEFINE ME
-    virtual void render (glm::mat4x4 const&, SceneGraph*) override;
+    virtual void render (glm::mat4x4 const&, SceneGraph*, double const&) override;
     virtual void cut (std::vector<std::pair<Indexer,Indexer>>& regions) final
         {regions.push_back({mGraphMesh.getVboIndexer(), mGraphMesh.getEboIndexer()});}
 
@@ -172,7 +190,7 @@ public:
     SceneGraph (Node*, GLuint const&, bool const& useGlobalMinMax, GLchar const* names[3]);
     ~SceneGraph() {/*delete(mRoot);*/}
 
-    void render (glm::mat4x4);
+    void render (glm::mat4x4, double const&);
     void mergeGraph (SceneGraph&, Node*); 
     void cut (Node*);
 

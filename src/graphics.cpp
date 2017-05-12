@@ -197,9 +197,10 @@ void Graphics::render ()
     GLfloat const color [4] {0.0f, 0.0f, 0.0f, 1.0f};
     glClearBufferfv(GL_COLOR, 0.0f, color);
     glClear(GL_DEPTH_BUFFER_BIT);
+    double t{glfwGetTime()};
     for (auto& graph: mGraphs)
     {
-        graph.render(glm::mat4x4(1.0f));
+        graph.render(glm::mat4x4(1.0f), t);
     }
     glfwSwapBuffers(mWindow);
 }

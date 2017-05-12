@@ -81,31 +81,39 @@ TransformNode::TransformNode ()
 TransformNode::TransformNode (glm::mat4x4 const& modMat)
     : mModMat{modMat}, Node(TRANSFORM) {}
 
+DynamicTransformNode::DynamicTransformNode ()
+    : Node(DYNAMIC_TRANSFORM) {} 
+
+DynamicInputTransformNode::DynamicInputTransformNode (glm::mat4x4 (*transCalc) (double const&))
+    : mTransCalc{transCalc} {}
+
 ObjectNode::ObjectNode ()
     : Node(OBJECT) {}
 
 ObjectNode::ObjectNode (GraphMesh const& mesh)
     : mGraphMesh{mesh}, Node{OBJECT} {}
 
-void Node::render (glm::mat4x4 const& modMat, SceneGraph* sg)
+void Node::render (glm::mat4x4 const& modMat, SceneGraph* sg, double const& t)
 {
-    for (auto const& child: mChildren) {child->render(modMat, sg);}
+    for (auto const& child: mChildren) {child->render(modMat, sg, t);}
 }
 
 Node::~Node ()
 {
     for (auto& child: mChildren) {/*delete(child);*/}
 }
-#include <GLFW/glfw3.h>
-#define GLM_FORCE_RADIANS
-#include <glm/ext.hpp>
 
-void TransformNode::render(glm::mat4x4 const& modMat, SceneGraph* sg) 
+void TransformNode::render(glm::mat4x4 const& modMat, SceneGraph* sg, double const& t) 
 {
-    Node::render(modMat*mModMat, sg);
+    Node::render(modMat*mModMat, sg, t);
 }
 
-void ObjectNode::render (glm::mat4x4 const& modMat, SceneGraph* sg) 
+void DynamicTransformNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double const& t)
+{
+    Node::render(modMat*calculateTransform(t), sg, t);
+}
+
+void ObjectNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double const& t) 
 {
     MeshQuery meshQuery{mGraphMesh.getQuery()};
     if (meshQuery.fDrawQuery)
@@ -124,7 +132,7 @@ void ObjectNode::render (glm::mat4x4 const& modMat, SceneGraph* sg)
             glDrawElements(mGraphMesh.getMode(), indexer.count, 
                     GL_UNSIGNED_INT, (void*)(size_t)indexer.first);
     }
-    Node::render(modMat, sg);
+    Node::render(modMat, sg, t);
 }
 
 SceneGraph::SceneGraph (Node* node, GLuint const& shaderProgram, bool const& useGlobalMinMax, GLchar const* names[3])
@@ -186,7 +194,7 @@ void SceneGraph::setGlobalCenter (std::vector<Vertex>::const_iterator begin, std
     mQuery.center /= range;
 }
 
-void SceneGraph::render (glm::mat4x4 modMat)
+void SceneGraph::render (glm::mat4x4 modMat, double const& t)
 {
     glBindVertexArray(mVao);
 //    glBindBuffer(GL_ARRAY_BUFFER, mVbo);
@@ -196,7 +204,7 @@ void SceneGraph::render (glm::mat4x4 modMat)
         glUniform4fv(mQuery.min.first, 1, glm::value_ptr(mQuery.min.second));
         glUniform4fv(mQuery.max.first, 1, glm::value_ptr(mQuery.max.second));
     }
-    mRoot->render(modMat, this);
+    mRoot->render(modMat, this, t);
 }
 
 void SceneGraph::mergeGraph (SceneGraph& graph, Node* node)
