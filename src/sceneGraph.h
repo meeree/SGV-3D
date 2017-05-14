@@ -6,7 +6,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include <algorithm>
-
+#include <memory>
 //TO-DO: Add overflow test in mergeGraph and other potentially big allocation methods
 //TO-DO: Add line drawing
 //TO-DO: Add methods to check if node data is bound to the scene graph the node is trying to join
@@ -51,8 +51,6 @@ public:
 	inline GLenum getMode () const {return mMode;}
 };
 
-class SceneGraph;
-
 struct Indexer 
 {
     GLuint first; 
@@ -77,37 +75,62 @@ public:
     inline Indexer getEboIndexer () const {return mEboIndexer;}
     inline void setIndexers (Indexer const& vboIndexer, Indexer const& eboIndexer)
         {mVboIndexer = vboIndexer;
-         if (mQuery.fPureVertexDraw)
-             mEboIndexer = {(GLuint)-1, -1};
-         else 
-             mEboIndexer = eboIndexer;}
+         mEboIndexer = mQuery.fPureVertexDraw ? Indexer{(GLuint)-1, -1} : eboIndexer;}
 };
+
+class SceneGraph;
 
 class Node
 {
-protected:
-    enum eType 
-    {
-        OBJECT=0, TRANSFORM=1, DYNAMIC_TRANSFORM=2, PURE_BRANCH=3
-    } mType;
-    std::vector<Node*> mChildren;
-    Node (eType const&);
 public:
-    Node ();
-    virtual ~Node ();
+    enum eNodeType 
+    {
+        GROUP=0
+    } mNodeType;
 
-    virtual void render (glm::mat4x4 const&, SceneGraph*, double const&);
+    Node () = delete;
+
+    virtual void render (glm::mat4x4 const&, SceneGraph*, double const&) = 0;
+    virtual void cut (std::vector<std::pair<Indexer,Indexer>>&) = 0;
+protected:
+    Node (eNodeType const&);
+};
+
+class GroupNode : public Node 
+{
+public:
+    enum eGroupNodeType 
+    {
+        OBJECT=0, TRANSFORM=1, DYNAMIC_TRANSFORM=2
+    } mGroupNodeType;
+    GroupNode ();
+
+    virtual void render (glm::mat4x4 const& modMat, SceneGraph* sg, double const& t);
     virtual void cut (std::vector<std::pair<Indexer,Indexer>>&) {}
 
     //Getter/setter functions 
     inline void addChild (Node* node) {mChildren.push_back(node);}
     inline void addChildren (std::vector<Node*> const& nodes)
         {mChildren.insert(mChildren.end(), nodes.begin(), nodes.end());}
+    inline void setChildren (std::vector<Node*> const& children)
+        {mChildren = children;}
     inline Node* getChild (unsigned const& index) const {return mChildren[index];}
     inline std::vector<Node*> getChildren () const {return mChildren;}
+protected:
+    std::vector<Node*> mChildren;
+    GroupNode (eGroupNodeType const&);
 };
 
-class DynamicTransformNode : public Node 
+class InstanceNode : public Node 
+{
+protected:
+    Node* mNode;
+public:
+//    virtual void render (glm::mat4x4 const& modMat, SceneGraph* sg, double const& t) final
+//        {sg->getInstanceHandler().render(modMat, t);}
+};
+
+class DynamicTransformNode : public GroupNode 
 {
 protected:
     virtual glm::mat4x4 calculateTransform (double const&) = 0; 
@@ -133,7 +156,7 @@ public:
         {mTransCalc = transCalc;}
 };
 
-class TransformNode : public Node 
+class TransformNode : public GroupNode 
 {
 protected:
     glm::mat4x4 mModMat;
@@ -148,7 +171,7 @@ public:
     inline glm::mat4x4 getTransform () const {return mModMat;}
 };
 
-class ObjectNode : public Node
+class ObjectNode : public GroupNode
 {
 protected:
     GraphMesh mGraphMesh;
@@ -181,6 +204,19 @@ private:
     std::vector<Vertex> mVertices;
     std::vector<GLuint> mIndices;
     GraphQuery mQuery;
+//
+//    class InstanceHandler 
+//    {
+//    private:
+//        struct InstanceContext 
+//        {
+//            GLuint numInstances, instanceCntr;
+//            std::vector<glm::mat4x4> instanceMats;
+//        };
+//        std::unordered_map<Node*,InstanceContext> mContextMap;
+//    public:
+//        void render (Node*&, glm::mat4x4 const&, double const&);
+//    } mInstanceHandler;
 
     void setGlobalMinMax (std::vector<Vertex>::const_iterator, std::vector<Vertex>::const_iterator);
     void setGlobalCenter (std::vector<Vertex>::const_iterator, std::vector<Vertex>::const_iterator);
@@ -188,27 +224,24 @@ public:
     SceneGraph () = delete;
     SceneGraph (GLchar const* names[3]);
     SceneGraph (Node*, GLuint const&, bool const& useGlobalMinMax, GLchar const* names[3]);
-    ~SceneGraph() {/*delete(mRoot);*/}
 
     void render (glm::mat4x4, double const&);
     void mergeGraph (SceneGraph&, Node*); 
     void cut (Node*);
 
-    GraphMesh bindMesh (Mesh&);
-    Mesh unbindMesh (GraphMesh&);
-    GraphMesh bindMesh (Mesh const&);
-    Mesh unbindMesh (GraphMesh const&);
+    GraphMesh bindMesh (Mesh&, bool const& deleteMesh=true);
+    Mesh unbindMesh (GraphMesh&, bool const& deleteGraphMesh=true);
 
     void setGlobalMinMax () {setGlobalMinMax(mVertices.begin(), mVertices.end());}
     void setGlobalCenter () {setGlobalCenter(mVertices.begin(), mVertices.end());}
 
     //Getter/setter functions 
-    inline void setRoot (Node* node) 
-		{delete mRoot; mRoot = node;}
+    inline void setRoot (Node* node) {mRoot = node;}
     inline Node* getRoot () const {return mRoot;}
     inline void toggleGlobalMinMax () 
 		{mQuery.fGlobalMinMax = !mQuery.fGlobalMinMax;}
     inline GraphQuery getQuery () const {return mQuery;}
+//    inline InstanceHandler getInstanceHandler () const {return mInstanceHandler;}
 };
 
 #endif //__SCENE_GRAPH_H__

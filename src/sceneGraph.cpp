@@ -69,49 +69,68 @@ GraphMesh::GraphMesh (std::vector<Vertex> const& verts, std::vector<GLuint> cons
                     verts.begin()+mVboIndexer.first+mVboIndexer.count);
 }
 
-Node::Node (eType const& type)
-    : mType{type} {}
+Node::Node (eNodeType const& nodeType)
+    : mNodeType{nodeType} {}
 
-Node::Node ()
-    : mType{PURE_BRANCH} {}
+GroupNode::GroupNode (eGroupNodeType const& groupNodeType)
+    : mGroupNodeType{groupNodeType}, Node(eNodeType::GROUP) {}
+
+GroupNode::GroupNode ()
+    : Node(eNodeType::GROUP) {}
 
 TransformNode::TransformNode ()
-    : Node(TRANSFORM) {}
+    : GroupNode(eGroupNodeType::TRANSFORM) {}
 
 TransformNode::TransformNode (glm::mat4x4 const& modMat)
-    : mModMat{modMat}, Node(TRANSFORM) {}
+    : mModMat{modMat}, GroupNode(eGroupNodeType::TRANSFORM) {}
 
 DynamicTransformNode::DynamicTransformNode ()
-    : Node(DYNAMIC_TRANSFORM) {} 
+    : GroupNode(eGroupNodeType::DYNAMIC_TRANSFORM) {} 
 
 DynamicInputTransformNode::DynamicInputTransformNode (glm::mat4x4 (*transCalc) (double const&))
     : mTransCalc{transCalc} {}
 
 ObjectNode::ObjectNode ()
-    : Node(OBJECT) {}
+    : GroupNode(eGroupNodeType::OBJECT) {}
 
 ObjectNode::ObjectNode (GraphMesh const& mesh)
-    : mGraphMesh{mesh}, Node{OBJECT} {}
+    : mGraphMesh{mesh}, GroupNode{eGroupNodeType::OBJECT} {}
 
-void Node::render (glm::mat4x4 const& modMat, SceneGraph* sg, double const& t)
+void GroupNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double const& t)
 {
     for (auto const& child: mChildren) {child->render(modMat, sg, t);}
 }
 
-Node::~Node ()
-{
-    for (auto& child: mChildren) {/*delete(child);*/}
-}
-
 void TransformNode::render(glm::mat4x4 const& modMat, SceneGraph* sg, double const& t) 
 {
-    Node::render(modMat*mModMat, sg, t);
+    GroupNode::render(modMat*mModMat, sg, t);
 }
 
 void DynamicTransformNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double const& t)
 {
-    Node::render(modMat*calculateTransform(t), sg, t);
+    GroupNode::render(modMat*calculateTransform(t), sg, t);
 }
+
+//void ObjectNode::renderInstanced (std::vector<glm::mat4x4> const& modMats, double const& t) 
+//{
+//    MeshQuery meshQuery{mGraphMesh.getQuery()};
+//    if (meshQuery.fDrawQuery)
+//    {
+//        GraphQuery graphQuery{sg->getQuery()};
+//        glUniformMatrix4fv(graphQuery.matLoc, 1, GL_FALSE, glm::value_ptr(modMat));
+//        if (!graphQuery.fGlobalMinMax)
+//        {
+//            glUniform4fv(graphQuery.min.first, 1, glm::value_ptr(meshQuery.min));
+//            glUniform4fv(graphQuery.max.first, 1, glm::value_ptr(meshQuery.max));
+//        }
+//        Indexer indexer{mGraphMesh.getSigIndexer()};
+//        if (meshQuery.fPureVertexDraw)
+//            glDrawArrays(mGraphMesh.getMode(), indexer.first, indexer.count);
+//        else 
+//            glDrawElements(mGraphMesh.getMode(), indexer.count, 
+//                    GL_UNSIGNED_INT, (void*)(size_t)indexer.first);
+//    }
+//}
 
 void ObjectNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double const& t) 
 {
@@ -132,7 +151,7 @@ void ObjectNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double const
             glDrawElements(mGraphMesh.getMode(), indexer.count, 
                     GL_UNSIGNED_INT, (void*)(size_t)indexer.first);
     }
-    Node::render(modMat, sg, t);
+    GroupNode::render(modMat, sg, t);
 }
 
 SceneGraph::SceneGraph (Node* node, GLuint const& shaderProgram, bool const& useGlobalMinMax, GLchar const* names[3])
@@ -209,7 +228,12 @@ void SceneGraph::render (glm::mat4x4 modMat, double const& t)
 
 void SceneGraph::mergeGraph (SceneGraph& graph, Node* node)
 {
-    node->addChild(graph.mRoot);
+    if (node->mNodeType != Node::eNodeType::GROUP)
+    {
+        std::cerr<<"Error in call to mergeGraph: node argument is not of group node type"<<std::endl;
+        exit(0);
+    }
+    static_cast<GroupNode*>(node)->addChild(graph.mRoot);
     mVertices.insert(mVertices.end(), 
                      std::make_move_iterator(graph.mVertices.begin()), 
                      std::make_move_iterator(graph.mVertices.end()));
@@ -223,37 +247,57 @@ void SceneGraph::mergeGraph (SceneGraph& graph, Node* node)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint)*mIndices.size(), mIndices.data(), GL_DYNAMIC_DRAW);
 }
 
-GraphMesh SceneGraph::bindMesh(Mesh& mesh)
+GraphMesh SceneGraph::bindMesh(Mesh& mesh, bool const& deleteMesh)
 {
-    GraphMesh graphMesh = std::move(static_cast<GraphMesh&>(mesh));
+    GraphMesh graphMesh = deleteMesh ? std::move(static_cast<GraphMesh&>(mesh)) 
+                                     : static_cast<GraphMesh&>(mesh);
     graphMesh.setIndexers({(GLuint)mVertices.size(), (GLsizei)graphMesh.mVertices.size()},
                           {(GLuint)mIndices.size(),  (GLsizei)graphMesh.mIndices.size()});
-    mVertices.insert(mVertices.end(), 
-                     std::make_move_iterator(graphMesh.mVertices.begin()), 
-                     std::make_move_iterator(graphMesh.mVertices.end()));
-    graphMesh.mVertices.clear();
+    if (deleteMesh)
+    {
+        mVertices.insert(mVertices.end(), 
+                         std::make_move_iterator(graphMesh.mVertices.begin()), 
+                         std::make_move_iterator(graphMesh.mVertices.end()));
+        graphMesh.mVertices.clear();
+    }
+    else 
+    {
+        mVertices.insert(mVertices.end(), 
+                         graphMesh.mVertices.begin(), 
+                         graphMesh.mVertices.end());
+    }
     glBindBuffer(GL_ARRAY_BUFFER, mVbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex)*mVertices.size(), mVertices.data(), GL_DYNAMIC_DRAW);
 
     if (!graphMesh.getQuery().fPureVertexDraw)
     {
-        mIndices.insert(mIndices.end(), 
-                        std::make_move_iterator(graphMesh.mIndices.begin()), 
-                        std::make_move_iterator(graphMesh.mIndices.end()));
-        graphMesh.mIndices.clear();
+        if (deleteMesh)
+        {
+            mIndices.insert(mIndices.end(), 
+                            std::make_move_iterator(graphMesh.mIndices.begin()), 
+                            std::make_move_iterator(graphMesh.mIndices.end()));
+            graphMesh.mIndices.clear();
+        }
+        else
+        {
+            mIndices.insert(mIndices.end(), 
+                            graphMesh.mIndices.begin(), 
+                            graphMesh.mIndices.end());
+        }
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mEbo);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint)*mIndices.size(), mIndices.data(), GL_DYNAMIC_DRAW);
     }
     return graphMesh;
 }
 
-Mesh SceneGraph::unbindMesh(GraphMesh& graphMesh)
+Mesh SceneGraph::unbindMesh(GraphMesh& graphMesh, bool const& deleteGraphMesh)
 {
     if (graphMesh.mVertices.size() > 0)
         std::cerr<<"Warning in call to unbindMesh: graphMesh arg. contains vertices that will be deleted"<<std::endl;
 
     Indexer vboIndexer{graphMesh.getVboIndexer()}, eboIndexer{graphMesh.getEboIndexer()};
-    Mesh mesh = std::move(static_cast<Mesh&>(graphMesh));
+    Mesh mesh = deleteGraphMesh ? std::move(static_cast<Mesh&>(graphMesh))
+                                : static_cast<Mesh&>(graphMesh);
     mesh.mVertices.insert(mesh.mVertices.end(),
                  std::make_move_iterator(mVertices.begin()+vboIndexer.first),
                  std::make_move_iterator(mVertices.begin()+vboIndexer.first+vboIndexer.count));
@@ -287,3 +331,27 @@ void SceneGraph::cut (Node* node)
         mIndices.erase(indStart, indStart+region.second.count);
     }
 }
+
+//SceneGraph::InstanceHandler::InstanceContext SceneGraph::InstanceHandler::update (Node*& node, glm::mat4x4 const& modMat, double const& t)
+//{
+//    if (mContextMap.find(node) == mContextMap.end())
+//    {
+//        std::cerr<<"Error in call to SceneGraph::InstanceHandler::render: node referenced by instance not contained in instance table."<<std::endl;
+//        exit(0);
+//    }
+//    InstanceContext context{mContextMap[node]};
+//    context.instanceMats[context.instanceCntr] = modMat; 
+//    if (++context.instanceCntr == context.numInstances)
+//    {
+//        context.instanceCntr = 0;
+//        if (node->mNodeType == Node::eNodeType::GROUP)
+//        {
+//            switch(static_cast<GroupNode&>(*node).mGroupNodeType) 
+//            {
+//                case GroupNode::eGroupNodeType::OBJECT:
+//                    node->instancedRender(context.instanceMats, t);
+//                default: break;
+//            }
+//        }
+//    }
+//}

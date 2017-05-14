@@ -4,6 +4,35 @@
 #include <glm/ext.hpp>
 #include <iostream>
 
+void Graphics::defaultMouseButtonCallback (GLFWwindow*, int, int, int)
+{
+}
+
+void Graphics::defaultKeyCallback(GLFWwindow*, int key, int, int action, int)
+{   
+    if (key == GLFW_KEY_K && action == GLFW_PRESS)
+    {
+        g.incColorSceme();
+    }
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+    {
+	    glfwTerminate(); 
+        exit(EXIT_SUCCESS);
+    }
+    if (key == GLFW_KEY_UP && action == GLFW_PRESS)
+    {
+        g.scale(11.0f/10);
+    }
+    if (key == GLFW_KEY_DOWN && action == GLFW_PRESS)
+    {
+        g.scale(10.0f/11);
+    }
+//    if (key == GLFW_KEY_X && action == GLFW_PRESS)
+//    {
+//        g.toggleAxes();
+//    }
+}
+
 GLuint Graphics::loadInShader(char const *fname, GLenum const &shaderType) 
 {
     std::vector<char> buffer;
@@ -124,6 +153,17 @@ Graphics::Graphics (GLfloat const& width, GLfloat const& height, char const* ver
 //    glUniformMatrix4fv(mCamera.vMat.first, 1, GL_FALSE, glm::value_ptr(mCamera.vMat.second));
     glUniformMatrix4fv(mCamera.pMat.first, 1, GL_FALSE, glm::value_ptr(mCamera.pMat.second));
     setScalar(1.0f);
+}
+
+void Graphics::setCallbackAndFlags()
+{
+    glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LESS);
+    glfwSetKeyCallback(mWindow, defaultKeyCallback);
+    glfwSetMouseButtonCallback(mWindow, defaultMouseButtonCallback);
+    glfwSetInputMode(g.getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetInputMode(g.getWindow(), GLFW_STICKY_KEYS, false);
+
 }
 
 void Graphics::update () {}

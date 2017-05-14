@@ -30,15 +30,20 @@ private:
 //        std::vector<std::pair<GLuint,glm::value_ptr>> mCustomUniforms;
 //    } mUniforms;
     std::pair<GLint, GLuint> mColorScheme;
-    static GLuint msColorSchemeCount;
     std::pair<GLint, GLfloat> mScalar;
 
+
+    static GLuint msColorSchemeCount;
+    static void defaultMouseButtonCallback (GLFWwindow*, int, int, int);
+    static void defaultKeyCallback(GLFWwindow*, int, int, int, int);
 	static GLuint loadInShader (char const*, GLenum const&);
+
     void setShaders (char const*, char const*);
     void update ();
     void performTransforms ();
 public:
     Graphics (GLfloat const&, GLfloat const&, char const*, char const*, const char* title="Untitled Window");
+    void setCallbackAndFlags(); 
 
     void render ();
     void loop ();
