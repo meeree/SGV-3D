@@ -27,6 +27,14 @@ void Graphics::defaultKeyCallback(GLFWwindow*, int key, int, int action, int)
     {
         g.scale(10.0f/11);
     }
+    if (key == GLFW_KEY_LEFT && action == GLFW_PRESS)
+    {
+        glfwSetTime(glfwGetTime()-10);
+    }
+    if (key == GLFW_KEY_RIGHT && action == GLFW_PRESS)
+    {
+        glfwSetTime(glfwGetTime()+10);
+    }
 //    if (key == GLFW_KEY_X && action == GLFW_PRESS)
 //    {
 //        g.toggleAxes();
@@ -220,7 +228,7 @@ void Graphics::performTransforms ()
         moveCam(moveVec);
     }
     mCamera.vMat.second = glm::lookAt(mCamera.pos.second, mCamera.pos.second+mCamera.dir.second, up); 
-    glUniformMatrix4fv(3, 1, GL_FALSE, glm::value_ptr(mCamera.vMat.second));
+    glUniformMatrix4fv(mCamera.vMat.first, 1, GL_FALSE, glm::value_ptr(mCamera.vMat.second));
     glUniform3fv(mCamera.pos.first, 1, glm::value_ptr(mCamera.pos.second));
 ////    mCamera.vMat.second = glm::lookAt(mCamera.pos.second, mCamera.pos.second+mCamera.dir.second, up); 
 //
@@ -229,8 +237,12 @@ void Graphics::performTransforms ()
 //    mCamera.vMat.second = glm::lookAt(glm::vec3(0,0,3), glm::vec3(0,0,0), glm::vec3(0,1,0));
 //    glUniformMatrix4fv(3, 1, GL_FALSE, glm::value_ptr(mCamera.vMat.second));
 ////    glUniformMatrix4fv(3, 1, GL_FALSE, glm::value_ptr(glm::lookAt(glm::vec3(0,0,3), glm::vec3(0,0,0), glm::vec3(0,1,0))));
-    glUniformMatrix4fv(3, 1, GL_FALSE, glm::value_ptr(glm::lookAt(mCamera.pos.second, mCamera.pos.second+mCamera.dir.second, up)));
+    glUniformMatrix4fv(mCamera.vMat.first, 1, GL_FALSE, glm::value_ptr(glm::lookAt(mCamera.pos.second, mCamera.pos.second+mCamera.dir.second, up)));
 }
+
+extern glm::mat4x4 matPrev;
+std::pair<GLfloat,GLfloat> sampleAudio (double&);
+glm::mat4x4 rotTrans(double&);
 
 void Graphics::render ()
 {
@@ -242,6 +254,7 @@ void Graphics::render ()
     {
         graph.render(glm::mat4x4(1.0f), t);
     }
+    matPrev = rotTrans(t);
     glfwSwapBuffers(mWindow);
 }
 
@@ -251,8 +264,8 @@ void Graphics::loop ()
     {
         performTransforms();
         auto pMat = glm::perspective(glm::radians(45.0f),(GLfloat)1920/1080, 0.1f, 200.0f);
-        glUniformMatrix4fv(2, 1, GL_FALSE, glm::value_ptr(pMat));
-        glUniformMatrix4fv(4, 1, GL_FALSE, glm::value_ptr(glm::mat4(1.0f)));
+        glUniformMatrix4fv(mCamera.pMat.first, 1, GL_FALSE, glm::value_ptr(pMat));
+//        glUniformMatrix4fv(mCamera.mMat.first, 1, GL_FALSE, glm::value_ptr(glm::mat4(1.0f)));
         render();
         glfwPollEvents();
     }

@@ -87,7 +87,7 @@ TransformNode::TransformNode (glm::mat4x4 const& modMat)
 DynamicTransformNode::DynamicTransformNode ()
     : GroupNode(eGroupNodeType::DYNAMIC_TRANSFORM) {} 
 
-DynamicInputTransformNode::DynamicInputTransformNode (glm::mat4x4 (*transCalc) (double const&))
+DynamicInputTransformNode::DynamicInputTransformNode (glm::mat4x4 (*transCalc) (double&))
     : mTransCalc{transCalc} {}
 
 ObjectNode::ObjectNode ()
@@ -96,22 +96,28 @@ ObjectNode::ObjectNode ()
 ObjectNode::ObjectNode (GraphMesh const& mesh)
     : mGraphMesh{mesh}, GroupNode{eGroupNodeType::OBJECT} {}
 
-void GroupNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double const& t)
+ColorNode::ColorNode ()
+    : GroupNode(eGroupNodeType::COLOR) {}
+
+ColorNode::ColorNode (glm::vec3 const& color, GLint const& loc)
+    : mColor{loc,color}, GroupNode(eGroupNodeType::COLOR) {}
+
+void GroupNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double& t)
 {
     for (auto const& child: mChildren) {child->render(modMat, sg, t);}
 }
 
-void TransformNode::render(glm::mat4x4 const& modMat, SceneGraph* sg, double const& t) 
+void TransformNode::render(glm::mat4x4 const& modMat, SceneGraph* sg, double& t) 
 {
     GroupNode::render(modMat*mModMat, sg, t);
 }
 
-void DynamicTransformNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double const& t)
+void DynamicTransformNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double& t)
 {
     GroupNode::render(modMat*calculateTransform(t), sg, t);
 }
 
-//void ObjectNode::renderInstanced (std::vector<glm::mat4x4> const& modMats, double const& t) 
+//void ObjectNode::renderInstanced (std::vector<glm::mat4x4> const& modMats, double& t) 
 //{
 //    MeshQuery meshQuery{mGraphMesh.getQuery()};
 //    if (meshQuery.fDrawQuery)
@@ -132,7 +138,7 @@ void DynamicTransformNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, do
 //    }
 //}
 
-void ObjectNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double const& t) 
+void ObjectNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double& t) 
 {
     MeshQuery meshQuery{mGraphMesh.getQuery()};
     if (meshQuery.fDrawQuery)
@@ -151,6 +157,12 @@ void ObjectNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double const
             glDrawElements(mGraphMesh.getMode(), indexer.count, 
                     GL_UNSIGNED_INT, (void*)(size_t)indexer.first);
     }
+    GroupNode::render(modMat, sg, t);
+}
+
+void ColorNode::render (glm::mat4x4 const& modMat, SceneGraph* sg, double& t) 
+{
+    glUniform3fv(mColor.first, 1, glm::value_ptr(mColor.second));
     GroupNode::render(modMat, sg, t);
 }
 
@@ -174,12 +186,6 @@ SceneGraph::SceneGraph (Node* node, GLuint const& shaderProgram, bool const& use
     mQuery.min.first = glGetUniformLocation(shaderProgram, names[1]);
     mQuery.max.first = glGetUniformLocation(shaderProgram, names[2]);
     mQuery.fGlobalMinMax = useGlobalMinMax;
-    if (node != nullptr)
-    {
-        setGlobalCenter();
-        setGlobalMinMax(); //This is called even if fGlobalMinMax is false because then we don't need to 
-                           //call it each time we toggle fGlobalMinMax to true
-    }
 }
 
 void SceneGraph::setGlobalMinMax (std::vector<Vertex>::const_iterator begin, std::vector<Vertex>::const_iterator end)
@@ -189,21 +195,30 @@ void SceneGraph::setGlobalMinMax (std::vector<Vertex>::const_iterator begin, std
     for (; begin != end; begin++)
     {
         Vertex const& vert{*begin};
-        for (int coord=0; coord<3; ++coord)
-        {
-            if (vert.pos[coord] < mQuery.min.second[coord]) 
-                mQuery.min.second[coord] = vert.pos[coord];
-            else if (vert.pos[coord] > mQuery.min.second[coord])
-                mQuery.max.second[coord] = vert.pos[coord];
-        }
-        GLfloat len{distance(vert.pos, mQuery.center)};
-        if (len < mQuery.min.second.w)
-        {
-            mQuery.min.second.w = len;
-        }
-        if (len > mQuery.max.second.w)
-            mQuery.max.second.w = len;
+        if (glm::length(vert.pos) < glm::length(mQuery.min.second))
+            mQuery.min.second = glm::vec4(vert.pos,glm::length(vert.pos));
+        else if (glm::length(vert.pos) > glm::length(mQuery.max.second))
+            mQuery.max.second = glm::vec4(vert.pos,glm::length(vert.pos));
     }
+//
+//    for (; begin != end; begin++)
+//    {
+//        Vertex const& vert{*begin};
+//        for (int coord=0; coord<3; ++coord)
+//        {
+//            if (vert.pos[coord] < mQuery.min.second[coord]) 
+//                mQuery.min.second[coord] = vert.pos[coord];
+//            else if (vert.pos[coord] > mQuery.min.second[coord])
+//                mQuery.max.second[coord] = vert.pos[coord];
+//        }
+//        GLfloat len{distance(vert.pos, mQuery.center)};
+//        if (len < mQuery.min.second.w)
+//        {
+//            mQuery.min.second.w = len;
+//        }
+//        if (len > mQuery.max.second.w)
+//            mQuery.max.second.w = len;
+//    }
 }
 
 void SceneGraph::setGlobalCenter (std::vector<Vertex>::const_iterator begin, std::vector<Vertex>::const_iterator end)
@@ -213,11 +228,9 @@ void SceneGraph::setGlobalCenter (std::vector<Vertex>::const_iterator begin, std
     mQuery.center /= range;
 }
 
-void SceneGraph::render (glm::mat4x4 modMat, double const& t)
+void SceneGraph::render (glm::mat4x4 modMat, double& t)
 {
     glBindVertexArray(mVao);
-//    glBindBuffer(GL_ARRAY_BUFFER, mVbo);
-//    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mEbo);
     if (mQuery.fGlobalMinMax)
     {
         glUniform4fv(mQuery.min.first, 1, glm::value_ptr(mQuery.min.second));
@@ -332,7 +345,7 @@ void SceneGraph::cut (Node* node)
     }
 }
 
-//SceneGraph::InstanceHandler::InstanceContext SceneGraph::InstanceHandler::update (Node*& node, glm::mat4x4 const& modMat, double const& t)
+//SceneGraph::InstanceHandler::InstanceContext SceneGraph::InstanceHandler::update (Node*& node, glm::mat4x4 const& modMat, double& t)
 //{
 //    if (mContextMap.find(node) == mContextMap.end())
 //    {
