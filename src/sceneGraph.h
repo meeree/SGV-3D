@@ -1,264 +1,289 @@
-#ifndef __SCENE_GRAPH_H__
-#define __SCENE_GRAPH_H__
+#ifndef __NODE_H__
+#define __NODE_H__
 
-#include <GL/glew.h>
-#include <GL/gl.h>
-#include <vector>
-#include <glm/glm.hpp>
-#include <algorithm>
-#include <memory>
-//TO-DO: Add overflow test in mergeGraph and other potentially big allocation methods
-//TO-DO: Add line drawing
-//TO-DO: Add methods to check if node data is bound to the scene graph the node is trying to join
+#include <stack>
+#include "base.h"
 
-struct Vertex 
+//TO-DO URGENT: add destructors
+
+struct RenderContext
 {
-    glm::vec3 pos, normal;
+    GLfloat t;
+    std::stack<glm::mat4x4> matStack;
+    std::stack<GLContext> glContextStack;
 };
 
-struct MeshQuery 
-{
-    glm::vec4 min, max; //Min and max local to the mesh
-    glm::vec3 center;
-    bool fDrawQuery, fPureVertexDraw;
-};
+class SceneTreeNode;
 
-class Mesh 
-{
-protected:
-    GLenum mMode;
-    MeshQuery mQuery;
-    //We use these more general methods that takes in iterators 
-    //because it is necessary for the inherited class GraphMesh 
-    void setMinMax (std::vector<Vertex>::const_iterator, std::vector<Vertex>::const_iterator);
-    void setCenter (std::vector<Vertex>::const_iterator, std::vector<Vertex>::const_iterator);
-public:
-    std::vector<Vertex> mVertices;
-    std::vector<GLuint> mIndices;
-
-    Mesh (GLenum const& mode=GL_TRIANGLES);
-    Mesh (std::vector<Vertex> const&, GLenum const& mode=GL_TRIANGLES);
-    Mesh (std::vector<Vertex> const&, std::vector<GLuint> const&, GLenum const& mode=GL_TRIANGLES);
-    //TO-DO: Add move versions
-//    Mesh (std::vector<Vertex>&&, std::vector<GLuint>&&);
-
-    //Getter/setter functions 
-    inline MeshQuery getQuery () const {return mQuery;}
-    inline void toggleDraw () {mQuery.fDrawQuery = !mQuery.fDrawQuery;}
-    void setMinMax () {setMinMax(mVertices.begin(), mVertices.end());}
-    void setCenter () {setCenter(mVertices.begin(), mVertices.end());};
-	inline GLenum getMode () const {return mMode;}
-};
-
-struct Indexer 
-{
-    GLuint first; 
-    GLsizei count;
-};
-
-class GraphMesh : public Mesh
-{
-private:
-    Indexer mVboIndexer, mEboIndexer;
-public:
-    GraphMesh () = default;
-    GraphMesh (std::vector<Vertex> const&, Indexer const&);
-    GraphMesh (std::vector<Vertex> const&, std::vector<GLuint> const&, Indexer const&, Indexer const&);
-
-    //Getter/setter functions 
-    inline Indexer getSigIndexer () const 
-        {return mQuery.fPureVertexDraw?mVboIndexer:mEboIndexer;}
-    inline void setSigIndexer (Indexer const& sigIndexer)
-        {(mQuery.fPureVertexDraw?mVboIndexer:mEboIndexer) = sigIndexer;} 
-    inline Indexer getVboIndexer () const {return mVboIndexer;}
-    inline Indexer getEboIndexer () const {return mEboIndexer;}
-    inline void setIndexers (Indexer const& vboIndexer, Indexer const& eboIndexer)
-        {mVboIndexer = vboIndexer;
-         mEboIndexer = mQuery.fPureVertexDraw ? Indexer{(GLuint)-1, -1} : eboIndexer;}
-};
-
-class SceneGraph;
-
-class Node
+class Node 
 {
 public:
     enum eNodeType 
     {
-        GROUP=0
-    } mNodeType;
-
-    Node () = delete;
-
-    virtual void render (glm::mat4x4 const&, SceneGraph*, double&) = 0;
-    virtual void cut (std::vector<std::pair<Indexer,Indexer>>&) = 0;
+        GROUP=0,LEAF=1 //I use these two classes to avoid having to handle both cases in each deriving node.
+                       //Note: group nodes can be explicitly created whereas 
+                       //leaf nodes are only intended for inheritance reasons
+    };
 protected:
     Node (eNodeType const&);
+    eNodeType const mType;
+public:
+    virtual void render (RenderContext*&) = 0;
+    virtual SceneTreeNode* extractCache (RenderContext*&) = 0;
 
-    static void setGlobalMinMax (std::vector<Vertex> const&);
-    static void setGlobalCenter (std::vector<Vertex> const&);
+    inline bool isGroup () const {return mType == GROUP;}
+    inline bool isLeaf () const {return mType == LEAF;}
 };
 
 class GroupNode : public Node 
 {
 public:
-    enum eGroupNodeType 
+    enum eGroupType 
     {
-        OBJECT=0, TRANSFORM=1, DYNAMIC_TRANSFORM=2, COLOR=3
-    } mGroupNodeType;
-    GroupNode ();
-
-    virtual void render (glm::mat4x4 const& modMat, SceneGraph* sg, double& t);
-    virtual void cut (std::vector<std::pair<Indexer,Indexer>>&) {}
-
-    //Getter/setter functions 
-    inline void addChild (Node* node) {mChildren.push_back(node);}
-    inline void addChildren (std::vector<Node*> const& nodes)
-        {mChildren.insert(mChildren.end(), nodes.begin(), nodes.end());}
-    inline void setChildren (std::vector<Node*> const& children)
-        {mChildren = children;}
-    inline Node* getChild (unsigned const& index) const {return mChildren[index];}
-    inline std::vector<Node*> getChildren () const {return mChildren;}
+        GROUP=0,TRANSFORM=1,CACHE=2
+    };
 protected:
     std::vector<Node*> mChildren;
-    GroupNode (eGroupNodeType const&);
+    eGroupType const mGroupType;
+    GroupNode (std::vector<Node*> const&, eGroupType const&);
+public:
+    GroupNode (std::vector<Node*> const& children={});
+    virtual void render (RenderContext*&) override;
+    virtual SceneTreeNode* extractCache (RenderContext*&) override;
+
+    //Getter/setter
+    inline void addChild (Node* const& child) {mChildren.push_back(child);} 
+    inline void addChildren (std::vector<Node*> const& children) {mChildren.insert(mChildren.end(), children.begin(), children.end());} 
+    inline void removeChild (unsigned const& index) {mChildren.erase(mChildren.begin()+index);}
+    inline std::vector<Node*> const& getChildren () const {return mChildren;}
+    inline Node* const& getChild (unsigned const& index) const {return mChildren.at(index);} 
+
+    inline bool isGroupType (eGroupType const& groupType) const {return mGroupType == groupType;}
+    inline eGroupType const& getType () const {return mGroupType;}
 };
 
-class InstanceNode : public Node 
+class LeafNode : public Node 
+{
+public:
+    enum eLeafType 
+    {
+        GEOMETRY=0 
+    };
+protected:
+    eLeafType const mLeafType;
+    LeafNode (eLeafType const&);
+public:
+    virtual void render (RenderContext*&) = 0;
+    virtual SceneTreeNode* extractCache (RenderContext*&) = 0;
+
+    inline bool isLeafType (eLeafType const& leafType) const {return mLeafType == leafType;}
+    inline eLeafType const& getType () const {return mLeafType;}
+};
+
+class TransformNode : public GroupNode
 {
 protected:
-    Node* mNode;
+    glm::mat4x4 mMat;
 public:
-//    virtual void render (glm::mat4x4 const& modMat, SceneGraph* sg, double& t) final
-//        {sg->getInstanceHandler().render(modMat, t);}
+    TransformNode (std::vector<Node*> const& children={}, glm::mat4x4 const& mat=glm::mat4x4(1.0f));
+    virtual void render (RenderContext*&) override;
+
+    //Getter/setter
+    inline void setTransform (glm::mat4x4 const& mat) {mMat = mat;}
+    inline glm::mat4x4 const& getTransform () const {return mMat;}
 };
 
-class DynamicTransformNode : public GroupNode 
-{
-protected:
-    virtual glm::mat4x4 calculateTransform (double&) = 0; 
-public:
-    DynamicTransformNode ();
-    virtual void render (glm::mat4x4 const&, SceneGraph*, double&) override;
-};
-
-//Easy way for users to define a custom DynamicTransformNode with their own function
-class DynamicInputTransformNode : public DynamicTransformNode 
-{
-private:
-    glm::mat4x4 (*mTransCalc) (double&);
-protected:
-    virtual glm::mat4x4 calculateTransform (double& t) override final
-        {return (*mTransCalc)(t);}
-public:
-    DynamicInputTransformNode () = default;
-    DynamicInputTransformNode (glm::mat4x4 (*) (double&));
-    
-    //Getter/setter functions 
-    inline void setTransformCalculator (glm::mat4x4 (*transCalc) (double&)) 
-        {mTransCalc = transCalc;}
-};
-
-class TransformNode : public GroupNode 
-{
-protected:
-    glm::mat4x4 mModMat;
-public:
-    TransformNode ();
-    TransformNode (glm::mat4x4 const& modMat);
-    virtual void render (glm::mat4x4 const&, SceneGraph*, double&) override;
-
-    //Getter/setter functions 
-    inline void transform (glm::mat4x4 const& transform) {mModMat = transform*mModMat;}
-    inline void setTransform (glm::mat4x4 const& transform) {mModMat = transform;}
-    inline glm::mat4x4 getTransform () const {return mModMat;}
-};
-
-class ObjectNode : public GroupNode
+class GeometryNode : public LeafNode
 {
 protected:
     GraphMesh mGraphMesh;
 public:
-    ObjectNode ();
-    ObjectNode (GraphMesh const&);
-    //DEFINE ME
-    virtual void render (glm::mat4x4 const&, SceneGraph*, double&) override;
-    virtual void cut (std::vector<std::pair<Indexer,Indexer>>& regions) final
-        {regions.push_back({mGraphMesh.getVboIndexer(), mGraphMesh.getEboIndexer()});}
+    GeometryNode ();
+    GeometryNode (GraphMesh graphMesh);
+    virtual void render (RenderContext*&) override;
+    virtual SceneTreeNode* extractCache (RenderContext*&) override;
 
-    //Getter/setter functions 
-    inline GraphMesh getGraphMesh () const {return mGraphMesh;}
-    inline void toggleDraw () {mGraphMesh.toggleDraw();}
+    //Getter/setter
+    inline void setGraphMesh (GraphMesh const& graphMesh) {mGraphMesh = graphMesh;}
+    inline GraphMesh const& getGraphMesh () const {return mGraphMesh;}
 };
 
-//FIX ME
-//FIX ME
-//FIX ME
-//FIX ME
-//FIX ME
-class ColorNode : public GroupNode 
+////RENDER CACHING CLASSES BELOW
+//class Instruction
+//{
+//public:
+//    enum eType 
+//    {
+//        BIND_SHADER=0,BIND_VAO=1,SET_UNIFORM=2,DRAW_ARRAYS=3,DRAW_ELEMENTS=4
+//    };
+//protected:
+//    eType const mType;
+//    Instruction (eType const&);
+//public:
+//    virtual ~Instruction () {}
+//    virtual void operator() () const = 0;
+//    bool operator== (Instruction const& inst) const
+//        {return mType == inst.mType;}
+//
+//    inline bool isType (eType const& type) const {return mType == type;}
+//    inline eType const& getType () const {return mType;}
+//};
+//
+//class BindShaderInstruction : public Instruction
+//{
+//private:
+//    GLuint mShader;
+//public:
+//    BindShaderInstruction (GLuint const&);
+//    virtual void operator() () const override final;
+//    bool operator== (BindShaderInstruction const& inst) const 
+//        {return mShader == inst.mShader;}
+//};
+//
+//class BindVaoInstruction : public Instruction
+//{
+//private:
+//    GLuint mVao;
+//public:
+//    BindVaoInstruction (GLuint const&);
+//    virtual void operator() () const override final;
+//    bool operator== (BindVaoInstruction const& inst) const 
+//        {return mVao == inst.mVao;}
+//};
+//
+//class SetMatrixInstruction : public Instruction
+//{
+//private:
+//    glm::mat4x4 mMat;
+//    GLint mMatLoc;
+//public:
+//    SetMatrixInstruction (glm::mat4x4 const&, GLint const&);
+//    virtual void operator() () const override final;
+//    bool operator== (SetMatrixInstruction const& inst) const 
+//        {return mMatLoc == inst.mMatLoc && mMat == inst.mMat;}
+//};
+//
+//class ArrayDrawInstruction : public Instruction
+//{
+//private:
+//    GLenum mPrimType;
+//    Indexer mVboIndexer;
+//public:
+//    ArrayDrawInstruction (Indexer const&, GLenum const&);
+//    virtual void operator() () const override final;
+//    bool operator== (ArrayDrawInstruction const& inst) const 
+//        {return mPrimType == inst.mPrimType && mVboIndexer.first == inst.mVboIndexer.first && mVboIndexer.count == inst.mVboIndexer.count;}
+//};
+//
+//class ElementDrawInstruction : public Instruction
+//{
+//private:
+//    GLenum mPrimType;
+//    Indexer mEboIndexer;
+//public:
+//    ElementDrawInstruction (Indexer const&, GLenum const&);
+//    virtual void operator() () const override final;
+//    bool operator== (ElementDrawInstruction const& inst) const 
+//        {return mPrimType == inst.mPrimType && mEboIndexer.first == inst.mEboIndexer.first && mEboIndexer.count == inst.mEboIndexer.count;}
+//};
+//
+//class InstructionStream 
+//{
+//private:
+//	std::vector<Instruction*> mStream;
+//public:
+//    InstructionStream () = default;
+//    InstructionStream (std::vector<Instruction*> const&);
+//    ~InstructionStream () {for (auto& inst: mStream) {delete inst;}};
+//
+//    void optimize ();
+//    inline void evaluate () const {for (auto const& inst: mStream) {(*inst)();}}
+//
+//    //Getter/setter
+//    inline void addInstruction (Instruction* inst) {mStream.push_back(inst);}
+//    inline void addInstructions (std::vector<Instruction*> const& stream) {mStream.insert(mStream.end(), stream.begin(), stream.end());}
+//};
+//
+//struct RenderJob
+//{
+//    LightGLContext context; //Notice that we only need vao because the vbo and ebo are not going to be edited 
+//                            //or need to be bound when rendering 
+//    glm::mat4x4 mat;
+//    GraphMesh gmesh;
+//};
+//
+//class RenderCache
+//{
+//private:
+//    std::vector<RenderJob> mJobs;
+//public:
+//    RenderCache () = default;
+//    RenderCache (std::vector<RenderJob> const&);
+//    void sort ();
+//    InstructionStream expand () const;
+//    
+//    //Getter/setter
+//    void addJob (RenderJob const& job) {mJobs.push_back(job);}
+//};
+
+class SceneTreeNode 
 {
-protected:
-    std::pair<GLint, glm::vec3> mColor;
 public:
-    ColorNode ();
-    ColorNode (glm::vec3 const&, GLint const&);
-    virtual void render (glm::mat4x4 const&, SceneGraph*, double&) override;
+    enum eType
+    {
+        GROUP=0, LEAF=1
+    };
+protected:
+    Node* const mDependent;
+    SceneTreeNode(eType const&, Node* const&);
+    eType const mType;
+public:
+    virtual ~SceneTreeNode () {}
+//    virtual void constructRenderCache (RenderCache&) const = 0;
+    
+    //Getter/setter
+    inline Node* const& getDependent () const {return mDependent;}
+
+    inline bool isLeaf () const {return mType == LEAF;}
+    inline bool isGroup () const {return mType == GROUP;}
 };
 
-struct GraphQuery
-{
-    bool fGlobalMinMax;
-    glm::vec3 center;
-    std::pair<GLint,glm::vec4> min, max; //Pairs of uniform location and value
-    GLuint matLoc;
-};
-
-class SceneGraph
+class GroupSceneTreeNode final : public SceneTreeNode 
 {
 private:
-    Node* mRoot;
-    GLuint mVao, mVbo, mEbo;
-    std::vector<Vertex> mVertices;
-    std::vector<GLuint> mIndices;
-    GraphQuery mQuery;
-//
-//    class InstanceHandler 
-//    {
-//    private:
-//        struct InstanceContext 
-//        {
-//            GLuint numInstances, instanceCntr;
-//            std::vector<glm::mat4x4> instanceMats;
-//        };
-//        std::unordered_map<Node*,InstanceContext> mContextMap;
-//    public:
-//        void render (Node*&, glm::mat4x4 const&, double&);
-//    } mInstanceHandler;
-
-    void setGlobalMinMax (std::vector<Vertex>::const_iterator, std::vector<Vertex>::const_iterator);
-    void setGlobalCenter (std::vector<Vertex>::const_iterator, std::vector<Vertex>::const_iterator);
+    std::vector<SceneTreeNode*> mChildren;
 public:
-    SceneGraph () = delete;
-    SceneGraph (GLchar const* names[3]);
-    SceneGraph (Node*, GLuint const&, bool const& useGlobalMinMax, GLchar const* names[3]);
-
-    void render (glm::mat4x4, double&);
-    void mergeGraph (SceneGraph&, Node*); 
-    void cut (Node*);
-
-    GraphMesh bindMesh (Mesh&, bool const& deleteMesh=true);
-    Mesh unbindMesh (GraphMesh&, bool const& deleteGraphMesh=true);
-
-    void setGlobalMinMax () {setGlobalMinMax(mVertices.begin(), mVertices.end());}
-    void setGlobalCenter () {setGlobalCenter(mVertices.begin(), mVertices.end());}
-
-    //Getter/setter functions 
-    inline void setRoot (Node* node) {mRoot = node;}
-    inline Node* getRoot () const {return mRoot;}
-    inline void toggleGlobalMinMax () 
-		{mQuery.fGlobalMinMax = !mQuery.fGlobalMinMax;}
-    inline GraphQuery getQuery () const {return mQuery;}
-//    inline InstanceHandler getInstanceHandler () const {return mInstanceHandler;}
+//    virtual ~GroupSceneTreeNode () override {for (auto& child: mChildren) {delete child;}}
+    GroupSceneTreeNode (std::vector<SceneTreeNode*>&&, Node* const&);
+//    virtual void constructRenderCache (RenderCache&) const override;
+    
+    //Getter/setter
+    inline std::vector<SceneTreeNode*> const& getChildren () const {return mChildren;}
 };
 
-#endif //__SCENE_GRAPH_H__
+class LeafSceneTreeNode final : public SceneTreeNode
+{
+private:
+   RenderContext mContext;
+public:
+    LeafSceneTreeNode (RenderContext const&, Node* const&);
+//    virtual void constructRenderCache (RenderCache&) const override;
+};
+
+class CacheNode : public GroupNode 
+{
+private:
+    SceneTreeNode* mSceneTree;
+//    InstructionStream mInstructionStream;
+    bool fCached;
+public:
+    CacheNode ();
+    virtual SceneTreeNode* extractCache (RenderContext*&) override final;
+    virtual void render (RenderContext*&) override;
+
+    //Getter/setter
+    inline SceneTreeNode* const& getSceneTree () const {return mSceneTree;} //This function is intended for use in testing:
+                                                                            //caching should be hidden from the user.
+};
+
+#endif //NODE_H

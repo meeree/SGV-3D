@@ -1,0 +1,24 @@
+digraph G {
+	n0x1adec20 [label = "Cache"];
+	n0x1adec20 -> n0x1adec70;
+	n0x1adec70 [label = "Group"];
+	n0x1adec70 -> n0x1adecd0;
+	n0x1adec70 -> n0x1aded50;
+	n0x1adecd0 [label = "Trans."];
+	n0x1adecd0 -> n0x1adedf0;
+	n0x1aded50 [label = "Trans."];
+	n0x1aded50 -> n0x1adedf0;
+	n0x1adedf0 [label = "Geom."];
+	n0x1adedf0 [label = "Geom."];
+	sgn0x1adffe0 [label = "Group"];
+	sgn0x1adffe0 -> sgn0x1adf9d0;
+	sgn0x1adffe0 -> sgn0x1adffa0;
+	sgn0x1adf9d0 [label = "Group"];
+	sgn0x1adf9d0 -> sgn0x1adf490;
+	sgn0x1adffa0 [label = "Group"];
+	sgn0x1adffa0 -> sgn0x1adfa10;
+	sgn0x1adf490 [label = "Leaf
+0,0"];
+	sgn0x1adfa10 [label = "Leaf
+0,0"];
+}

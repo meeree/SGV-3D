@@ -1,0 +1,39 @@
+#ifndef __GRAPH_VIEWER_H__
+#define __GRAPH_VIEWER_H__
+
+#include "sceneGraph.h"
+
+#include <fstream>
+
+void graphToGraphviz (Node* root, char const* flName)
+{
+    std::ofstream fl;
+    fl.open(flName, std::ios::out);
+
+    unsigned len;
+    fl.seekp(0, std::ios::end);
+    assert(fl.tellp() == 0);
+
+    fl<<"digraph G {\n";
+    std::vector<Node*> layer0{root}, layer1; //Switch between two layers
+    while (layer0.size() > 0)
+    {
+        for (auto const& node: layer0)
+        {
+            GroupNode* gnode{dynamic_cast<GroupNode*>(node)};
+            if (gnode)
+            {
+                std::vector<Node*> children{gnode->getChildren()};
+                for (auto const& child: children)
+                {
+                    fl<<"n"<<&node<<"->"<<"n"<<&child<<";\n";
+                }
+                layer1.insert(layer1.end(), std::make_move_iterator(children.begin()),
+                                            std::make_move_iterator(children.end()));
+            }
+        } 
+    }
+    fl<<"}";
+}
+
+#endif //__GRAPH_VIEWER_H__
