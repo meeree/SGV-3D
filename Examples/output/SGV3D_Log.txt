@@ -1,0 +1,6 @@
+[1  ](DEBUG    ) main()         ../parametric_plotter.cpp28   Beginning main loop                                                                                                             
+[1  ](DEBUG    ) GLFWContext()  ../../src2/graphics.cpp  109  Constructed GLFWContext                                                                                                         
+[1  ](DEBUG    ) Initailize()   ../../src2/graphics.cpp  119  Initializing GLFWContext "Parmetric Plotter with SGV3D!"; window width 1080.0, height 1080.0; for OpenGL v.4.5                  
+[1  ](DEBUG    ) Initailize()   ../../src2/graphics.cpp  167  Successfully initialized GLFWContext                                                                                            
+[1  ](DEBUG    ) CacheUniforms()../../src2/graphics.cpp  12   Beginning to cache uniforms for current shader program                                                                          
+[1  ](DEBUG    ) CacheUniforms()../../src2/graphics.cpp  33   Cached uniform "model" to location 2                                                                                            

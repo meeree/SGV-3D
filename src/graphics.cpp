@@ -1,272 +1,255 @@
 #include "graphics.h"
-#include <fstream>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/ext.hpp>
+#include "sceneGraph.h"
+
+#include <glm/gtc/type_ptr.hpp>
+#include <algorithm>
+
 #include <iostream>
+#include <iomanip>
 
-void Graphics::defaultMouseButtonCallback (GLFWwindow*, int, int, int)
+void GLUniformCache::CacheUniforms (GLuint const& shader)
 {
+    DEBUG_MSG("Beginning to cache uniforms for current shader program");
+
+    GLint numActiveUniforms = 0;
+    glGetProgramInterfaceiv(shader, GL_UNIFORM, GL_ACTIVE_RESOURCES, &numActiveUniforms);
+
+    std::vector<GLchar> nameBuff(256);
+    std::vector<GLenum> properties;
+    properties.push_back(GL_NAME_LENGTH);
+    properties.push_back(GL_TYPE);
+    properties.push_back(GL_ARRAY_SIZE);
+    std::vector<GLint> values(properties.size());
+    for(int i = 0; i < numActiveUniforms; ++i)
+    {
+      glGetProgramResourceiv(shader, GL_UNIFORM, i, properties.size(),
+        &properties[0], values.size(), NULL, &values[0]);
+    
+      nameBuff.resize(values[0]); //The length of the name.
+      glGetProgramResourceName(shader, GL_UNIFORM, i, nameBuff.size(), NULL, nameBuff.data());
+      std::string name(nameBuff.data(), nameBuff.size() - 1);
+
+      GLint loc{glGetUniformLocation(shader, name.c_str())};
+      DEBUG_MSG("Cached uniform \"%s\" to location %i", name.c_str(), loc);
+    }
 }
 
-void Graphics::defaultKeyCallback(GLFWwindow*, int key, int, int action, int)
-{   
-    if (key == GLFW_KEY_K && action == GLFW_PRESS)
-    {
-        g.incColorSceme();
-    }
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-    {
-	    glfwTerminate(); 
-        exit(EXIT_SUCCESS);
-    }
-    if (key == GLFW_KEY_UP && action == GLFW_PRESS)
-    {
-        g.scale(11.0f/10);
-    }
-    if (key == GLFW_KEY_DOWN && action == GLFW_PRESS)
-    {
-        g.scale(10.0f/11);
-    }
-    if (key == GLFW_KEY_LEFT && action == GLFW_PRESS)
-    {
-        glfwSetTime(glfwGetTime()-10);
-    }
-    if (key == GLFW_KEY_RIGHT && action == GLFW_PRESS)
-    {
-        glfwSetTime(glfwGetTime()+10);
-    }
-//    if (key == GLFW_KEY_X && action == GLFW_PRESS)
-//    {
-//        g.toggleAxes();
-//    }
+void BasicCamera::UpdateView (glm::vec3 const& upVec)
+{
+    m_view = glm::lookAt(m_pos, m_pos+m_dir, upVec);
 }
 
-GLuint Graphics::loadInShader(char const *fname, GLenum const &shaderType) 
+void BasicCamera::UpdateUniforms (GLint const& posIdx, GLint const& dirIdx, GLint const& projIdx, GLint const& viewIdx)
 {
-    std::vector<char> buffer;
-    std::ifstream in;
-    in.open(fname, std::ios::binary);
-
-    if(in.is_open()) 
-	{
-        in.seekg(0, std::ios::end);
-        size_t const &length = in.tellg();
-
-        in.seekg(0, std::ios::beg);
-
-        buffer.resize(length + 1);
-        in.read(&buffer[0], length);
-        in.close();
-        buffer[length] = '\0';
-    } 
-	else 
-	{
-        std::cerr<<"Unable to open "<<fname<<std::endl;
-        exit(-1);
-    }
-
-    GLchar const *src = &buffer[0];
-
-    GLuint shader = glCreateShader(shaderType);
-    glShaderSource(shader, 1, &src, NULL);
-    glCompileShader(shader);
-    GLint test;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &test);
-
-    if(!test) 
-	{
-        std::cerr<<"Shader compilation failed with this message:"<<std::endl;
-        std::vector<char> compilationLog(512);
-        glGetShaderInfoLog(shader, compilationLog.size(), NULL, &compilationLog[0]);
-        std::cerr<<&compilationLog[0]<<std::endl;
-        glfwTerminate();
-        exit(-1);
-    }
-
-    return shader;
+    glUniform3fv(posIdx, 1, glm::value_ptr(m_pos));
+    glUniform3fv(dirIdx, 1, glm::value_ptr(m_dir));
+    glUniformMatrix4fv(projIdx, 1, GL_FALSE, glm::value_ptr(m_projection));
+    glUniformMatrix4fv(viewIdx, 1, GL_FALSE, glm::value_ptr(m_view));
 }
 
-GLuint Graphics::msColorSchemeCount = 1;
-
-void Graphics::setShaders (char const* vertLoc, char const* fragLoc)
+void FreeRoamCamera::Update (glm::vec2 const& scaledMouse, glm::vec3 const& moveVec, float const& dt) 
 {
-	mShaderProgram = glCreateProgram();
+    m_theta += dt * scaledMouse;
+    glm::mat3x3 rotMat = glm::mat3x3({cos(m_theta[0]), 0.0f, -sin(m_theta[0])}, {0.0f, 1.0f, 0.0f}, {sin(m_theta[0]), 0.0f, cos(m_theta[0])})
+                        *glm::mat3x3({1.0f, 0.0f, 0.0f}, {0.0f, cos(m_theta[1]), sin(m_theta[1])}, {0.0f, -sin(m_theta[1]), cos(m_theta[1])});
 
-    auto vertShader = loadInShader(vertLoc, GL_VERTEX_SHADER);
-    auto fragShader = loadInShader(fragLoc, GL_FRAGMENT_SHADER);
+    Look(rotMat * glm::vec3(0.0f, 0.0f, 1.0f));
+    glm::vec3 up = rotMat * glm::vec3(0.0f, 1.0f, 0.0f);
+    UpdateView(up);
 
-    glAttachShader(mShaderProgram, vertShader);
-    glAttachShader(mShaderProgram, fragShader);
-
-    glDeleteShader(vertShader);
-    glDeleteShader(fragShader);
-
-    glLinkProgram(mShaderProgram);
+    Move(moveVec);
 }
 
-Graphics::Graphics (GLfloat const& width, GLfloat const& height, char const* vertLoc, char const* fragLoc, const char* title)
-    : mWidth{width}, mHeight{height}, fUpdate{true}
+void GLInfo::CacheProgram (StrippedGLProgram const& program) 
 {
-    mColorScheme.second = 0;
-    mCamera.horiAngle = M_PI; 
-    mCamera.vertAngle = 0.0;
-    mCamera.lookSpeed = 50.0f;
-    mCamera.moveSpeed = 1.0f;
-    if(!glfwInit()) 
+    GLUniformCache uc(program.Shader()); //Cache uniforms in current context
+    m_programs.push_back({program, std::move(uc)});
+}
+
+bool GLInfo::SetProgram (StrippedGLProgram const& program)
+{
+    auto progIdx = std::find(m_programs.begin(), m_programs.end(), program);
+    if(progIdx == m_programs.end())
+        return false;
+
+    m_curProgram = &(*progIdx);
+    return true;
+}
+
+bool GLContext::GetNewProgram (GLProgram& program, const char* const& vertShader, const char* const& fragShader, uint8_t const& meshMask, bool const& isStatic)
+{
+    program = GLProgram(meshMask, vertShader, fragShader, isStatic);
+    m_info.CacheProgram(program.Strip());
+    m_info.SetProgram(program.Strip());
+
+    return true;
+}
+
+bool GLContext::BindProgram (GLProgram const& program)
+{
+    return BindProgram(program.Strip());
+}
+
+bool GLContext::BindProgram (StrippedGLProgram const& program)
+{
+    glUseProgram(program.Shader());
+    
+    if(m_info.SetProgram(program))
     {
-        std::cerr<<"failed to initialize glfw"<<std::endl;
-        exit(EXIT_SUCCESS);
+        glBindVertexArray(program.Vao()); 
+        return true;
     }
+
+    return false;
+}
+
+GLFWContext::GLFWContext () 
+    : m_keyCallback{nullptr}, m_mouseButtonCallback{nullptr}, m_window{nullptr} 
+{
+    DEBUG_MSG("Constructed GLFWContext");
+}
+
+bool GLFWContext::Initailize (GLint const (&version)[2], 
+                 GLfloat const& width, GLfloat const& height, 
+                 bool const& initGlew,
+                 std::string const& title,
+                 GLFWkeyfun const& keyCallback, GLFWmousebuttonfun const& mouseButtonCallback) 
+{
+    DEBUG_MSG("Initializing GLFWContext \"%s\"; window width %.1f, height %.1f; for OpenGL v.%i.%i", 
+              title.c_str(), width, height, version[0], version[1]);
+
+    m_info.SetDimension(width, height);
+    m_info.SetTitle(title);
+
+    if(!glfwInit())
+    {
+        ERROR("Failed to initialize GLFW");
+        return false;
+    }    
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
-    mWindow = glfwCreateWindow(width, height, title, NULL, NULL);
-    if(!mWindow) 
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, version[0]);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, version[1]);
+    m_window = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
+    if(!m_window)
     {
-        std::cerr<<"failed to initialize window"<<std::endl;
-        exit(EXIT_SUCCESS);
+        ERROR("Failed to initialize GLFW window");
+        return false;
     }
-    glfwMakeContextCurrent(mWindow);
+    glfwMakeContextCurrent(m_window);
 
-    glewExperimental = GL_TRUE;
-    if(glewInit() != GLEW_OK) 
+    if(initGlew)
     {
-        std::cerr<<"failed to initialize glew"<<std::endl;
-        exit(EXIT_SUCCESS);
+        glewExperimental = GL_TRUE;
+        if(glewInit() != GLEW_OK) 
+        {
+            ERROR("Failed to initialize glew");
+            return false;
+        }
     }
-    setShaders(vertLoc, fragLoc);
-    glUseProgram(mShaderProgram);
 
-    //IMPROVE THIS
-    mCamera.pos.first = glGetUniformLocation(mShaderProgram, "camPos");
-    mCamera.dir.first = glGetUniformLocation(mShaderProgram, "camDir");
-    mCamera.pMat.first = glGetUniformLocation(mShaderProgram, "pMat");
-    if (mCamera.pMat.first == -1)
-        std::cerr<<"Warning: projection matrix not active or present in shader. It should be named 'pMat'"<<std::endl;
-    mCamera.vMat.first = glGetUniformLocation(mShaderProgram, "vMat");
-    if (mCamera.vMat.first == -1)
-        std::cerr<<"Warning: view matrix not active or present in shader. It should be named 'vMat'"<<std::endl;
-    mColorScheme.first = glGetUniformLocation(mShaderProgram, "colorScheme");
-    if (mColorScheme.first == -1)
-        std::cerr<<"Warning: color scheme not active or present in shader. It should be named 'colorScheme'"<<std::endl;
-    mScalar.first = glGetUniformLocation(mShaderProgram, "scalar");
-    if (mScalar.first == -1)
-        std::cerr<<"Warning: scalar not active or present in shader. It should be named 'scalar'"<<std::endl;
+    if(keyCallback)
+        glfwSetKeyCallback(m_window, keyCallback);
 
+    if(mouseButtonCallback)
+        glfwSetMouseButtonCallback(m_window, mouseButtonCallback);
 
-    glUniform1ui(mColorScheme.first, mColorScheme.second);
-//    glUniform3fv(mCamera.pos.first, 1, glm::value_ptr(mCamera.pos.second));
-//    glUniform3fv(mCamera.dir.first, 1, glm::value_ptr(mCamera.dir.second));
-//    glUniformMatrix4fv(mCamera.vMat.first, 1, GL_FALSE, glm::value_ptr(mCamera.vMat.second));
-    glUniformMatrix4fv(mCamera.pMat.first, 1, GL_FALSE, glm::value_ptr(mCamera.pMat.second));
-    setScalar(1.0f);
+    //Mouse and key callbacks can retrieve information from and update GLFWContext
+    //through glfw's "user pointer":
+    //see http://www.glfw.org/docs/latest/window_guide.html#window_userptr
+    glfwSetWindowUserPointer(m_window, this);
+
+    glEnable(GL_BLEND); 
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_DEPTH_TEST); 
+    glDepthFunc(GL_LESS);
+
+    DEBUG_MSG("Successfully initialized GLFWContext");
+
+    return true;
 }
 
-void Graphics::setCallbackAndFlags()
-{
-    glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LESS);
-    glfwSetKeyCallback(mWindow, defaultKeyCallback);
-    glfwSetMouseButtonCallback(mWindow, defaultMouseButtonCallback);
-    glfwSetInputMode(g.getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    glfwSetInputMode(g.getWindow(), GLFW_STICKY_KEYS, false);
-
-}
-
-void Graphics::update () {}
-
-void Graphics::performTransforms ()
+void GLFWContext::performTransforms ()
 {
     double t = glfwGetTime();
     double xpos, ypos;
-    glfwGetCursorPos(mWindow, &xpos, &ypos);
-    glfwSetCursorPos(mWindow, mWidth/2, mHeight/2);
-    mCamera.horiAngle += mCamera.lookSpeed*(glfwGetTime()-t)*(mWidth/2-xpos);
-    mCamera.vertAngle += mCamera.lookSpeed*(glfwGetTime()-t)*(mHeight/2-ypos);
+    glfwGetCursorPos(m_window, &xpos, &ypos);
+    glfwSetCursorPos(m_window, m_info.Width()/2, m_info.Height()/2);
+    glm::vec2 scaledMouse{m_info.Width()/2-xpos, m_info.Height()/ypos};
 
-    mCamera.dir.second = glm::vec3(
-        cos(mCamera.vertAngle) * sin(mCamera.horiAngle),
-        sin(mCamera.vertAngle),
-        cos(mCamera.vertAngle) * cos(mCamera.horiAngle)
-    );
-    glm::vec3 right{
-        sin(mCamera.horiAngle - 3.14f/2.0f),
-        0,
-        cos(mCamera.horiAngle - 3.14f/2.0f)
-    };
-    glm::vec3 up = glm::cross(right, mCamera.dir.second);
-    glm::vec3 moveVec{0.0f};
-    GLfloat  alteredMoveSpeed = glfwGetKey(mWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ? 
-                                mCamera.moveSpeed/2 : mCamera.moveSpeed;
-    if (glfwGetKey(mWindow, GLFW_KEY_S) == GLFW_PRESS)
-    {
-        moveVec -= alteredMoveSpeed*mCamera.dir.second;
-    }
-    if (glfwGetKey(mWindow, GLFW_KEY_W) == GLFW_PRESS)
-    {
-        moveVec += alteredMoveSpeed*mCamera.dir.second;
-    }
-    if (glfwGetKey(mWindow, GLFW_KEY_Q) == GLFW_PRESS)
-    {
-        moveVec -= alteredMoveSpeed*up;
-    }
-    if (glfwGetKey(mWindow, GLFW_KEY_E) == GLFW_PRESS)
-    {
-        moveVec += alteredMoveSpeed*up;
-    }
-    if (glfwGetKey(mWindow, GLFW_KEY_A) == GLFW_PRESS)
-    {
-        moveVec -= alteredMoveSpeed*right;
-    }
-    if (glfwGetKey(mWindow, GLFW_KEY_D) == GLFW_PRESS)
-    {
-        moveVec += alteredMoveSpeed*right;
-    }
-    if (length(moveVec) > FLT_EPSILON)
-    {
-        moveCam(moveVec);
-    }
-    mCamera.vMat.second = glm::lookAt(mCamera.pos.second, mCamera.pos.second+mCamera.dir.second, up); 
-    glUniformMatrix4fv(mCamera.vMat.first, 1, GL_FALSE, glm::value_ptr(mCamera.vMat.second));
-    glUniform3fv(mCamera.pos.first, 1, glm::value_ptr(mCamera.pos.second));
-////    mCamera.vMat.second = glm::lookAt(mCamera.pos.second, mCamera.pos.second+mCamera.dir.second, up); 
-//
-//    //IMPROVE THIS METHOD
-//    glUniform3fv(mCamera.pos.first, 1, glm::value_ptr(mCamera.pos.second));
-//    mCamera.vMat.second = glm::lookAt(glm::vec3(0,0,3), glm::vec3(0,0,0), glm::vec3(0,1,0));
-//    glUniformMatrix4fv(3, 1, GL_FALSE, glm::value_ptr(mCamera.vMat.second));
-////    glUniformMatrix4fv(3, 1, GL_FALSE, glm::value_ptr(glm::lookAt(glm::vec3(0,0,3), glm::vec3(0,0,0), glm::vec3(0,1,0))));
-    glUniformMatrix4fv(mCamera.vMat.first, 1, GL_FALSE, glm::value_ptr(glm::lookAt(mCamera.pos.second, mCamera.pos.second+mCamera.dir.second, up)));
+    glm::vec3 moveVec(0.0f);
+	static_cast<FreeRoamCamera*>(m_camera)->Update(scaledMouse, moveVec, glfwGetTime() - t);
 }
 
-extern glm::mat4x4 matPrev;
-std::pair<GLfloat,GLfloat> sampleAudio (double&);
-glm::mat4x4 rotTrans(double&);
-
-void Graphics::render ()
+bool GLFWContext::Render (StrippedGLProgram const& program, GLfloat const (&color)[4]) 
 {
-    GLfloat const color [4] {0.0f, 0.0f, 0.0f, 1.0f};
-    glClearBufferfv(GL_COLOR, 0.0f, color);
+    glClearBufferfv(GL_COLOR, 0.0f, color); 
     glClear(GL_DEPTH_BUFFER_BIT);
-    double t{glfwGetTime()};
-    for (auto& graph: mGraphs)
+
+    if(m_root)
     {
-        graph.render(glm::mat4x4(1.0f), t);
+		if(m_camera)
+			performTransforms();
+
+        RenderContext* rc {new RenderContext{{{},-1.0f}, std::stack<glm::mat4x4>(), program}}; //FIX ME 
+        rc->matStack.push(glm::mat4x4(1.0f));
+        rc->globals.t = glfwGetTime();
+        m_root->render(rc);
     }
-    matPrev = rotTrans(t);
-    glfwSwapBuffers(mWindow);
+    else
+    {
+        WARNING("No root node in GLFWContext for rendering");
+    }
+
+    glfwSwapBuffers(m_window);
+    glfwPollEvents();
+
+    return true;
 }
 
-void Graphics::loop ()
+void GLFWContext::DisableCursor () const
 {
-    for (;;)
-    {
-        performTransforms();
-        auto pMat = glm::perspective(glm::radians(45.0f),(GLfloat)1920/1080, 0.1f, 200.0f);
-        glUniformMatrix4fv(mCamera.pMat.first, 1, GL_FALSE, glm::value_ptr(pMat));
-//        glUniformMatrix4fv(mCamera.mMat.first, 1, GL_FALSE, glm::value_ptr(glm::mat4(1.0f)));
-        render();
-        glfwPollEvents();
-    }
+    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetInputMode(m_window, GLFW_STICKY_KEYS, false);
 }
+
+//void DefaultMouseButtonCallback (GLFWwindow*, int, int, int)
+//{
+//}
+//
+//void DefaultKeyCallback(GLFWwindow*, int key, int, int action, int)
+//{   
+//    if(action != GLFW_PRESS)
+//        return;
+//
+//    GLGraphicsManager const& ggm{GLGraphicsManager::Get()};
+//    switch(key)
+//    {
+//        case GLFW_KEY_K:
+//            ggm.incColorSceme();
+//            break;
+//        case GLFW_KEY_ESCAPE:
+//           glfwTerminate(); 
+//           exit(EXIT_SUCCESS);
+//           break;
+//        case GLFW_KEY_UP:
+//            ggm.scale(11.0f/10);
+//            break;
+//GL_ELEMENT_ARRAY_BUFFER_BINDING
+//        case GLFW_KEY_DOWN:
+//            ggm.scale(10.0f/11);
+//            break;
+//        case GLFW_KEY_LEFT:
+//           glfwSetTime(glfwGetTime()-10);
+//           break;
+//        case GLFW_KEY_RIGHT:
+//           glfwSetTime(glfwGetTime()+10);
+//           break;
+//        default:
+//           break;
+//    }
+////    if (key == GLFW_KEY_X && action == GLFW_PRESS)
+////    {
+////        g.toggleAxes();
+////    }
+//}
