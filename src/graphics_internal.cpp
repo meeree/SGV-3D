@@ -1,5 +1,4 @@
-#include "graphics.h"
-#include "sceneGraph.h"
+#include "graphics_internal.h"
 
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
@@ -181,75 +180,8 @@ void GLFWContext::performTransforms ()
 	static_cast<FreeRoamCamera*>(m_camera)->Update(scaledMouse, moveVec, glfwGetTime() - t);
 }
 
-bool GLFWContext::Render (StrippedGLProgram const& program, GLfloat const (&color)[4]) 
-{
-    glClearBufferfv(GL_COLOR, 0.0f, color); 
-    glClear(GL_DEPTH_BUFFER_BIT);
-
-    if(m_root)
-    {
-		if(m_camera)
-			performTransforms();
-
-        RenderContext* rc {new RenderContext{{{},-1.0f}, std::stack<glm::mat4x4>(), program}}; //FIX ME 
-        rc->matStack.push(glm::mat4x4(1.0f));
-        rc->globals.t = glfwGetTime();
-        m_root->render(rc);
-    }
-    else
-    {
-        WARNING("No root node in GLFWContext for rendering");
-    }
-
-    glfwSwapBuffers(m_window);
-    glfwPollEvents();
-
-    return true;
-}
-
 void GLFWContext::DisableCursor () const
 {
     glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetInputMode(m_window, GLFW_STICKY_KEYS, false);
 }
-
-//void DefaultMouseButtonCallback (GLFWwindow*, int, int, int)
-//{
-//}
-//
-//void DefaultKeyCallback(GLFWwindow*, int key, int, int action, int)
-//{   
-//    if(action != GLFW_PRESS)
-//        return;
-//
-//    GLGraphicsManager const& ggm{GLGraphicsManager::Get()};
-//    switch(key)
-//    {
-//        case GLFW_KEY_K:
-//            ggm.incColorSceme();
-//            break;
-//        case GLFW_KEY_ESCAPE:
-//           glfwTerminate(); 
-//           exit(EXIT_SUCCESS);
-//           break;
-//        case GLFW_KEY_UP:
-//            ggm.scale(11.0f/10);
-//            break;
-//GL_ELEMENT_ARRAY_BUFFER_BINDING
-//        case GLFW_KEY_DOWN:
-//            ggm.scale(10.0f/11);
-//            break;
-//        case GLFW_KEY_LEFT:
-//           glfwSetTime(glfwGetTime()-10);
-//           break;
-//        case GLFW_KEY_RIGHT:
-//           glfwSetTime(glfwGetTime()+10);
-//           break;
-//        default:
-//           break;
-//    }
-////    if (key == GLFW_KEY_X && action == GLFW_PRESS)
-////    {
-////        g.toggleAxes();
-////    }
-//}

@@ -10,17 +10,12 @@
 
 //Includes
 #include "../src/runtimeOptions.h"
-#include "../src/graphics.h"
+#include "../src/sgv_graphics.h"
 #include "../src/sceneGraph.h"
 
 #include <cstdlib>
 #include <algorithm>
 #include <iostream>
-
-#define GLM_FORCE_RADIANS
-#include <glm/ext.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
 
 //Construct flower polar graph to be displayed using GL_LINES
 Mesh FlowerLines (double const& dt, glm::vec4 const& color, unsigned const& numPetals)
@@ -82,8 +77,8 @@ int main (int argc, char** argv)
     DEBUG_MSG("Beginning main loop");
 
     //Initalize our GLFWcontext with version, window width and height, title, etc.
-    GLFWContext context;
-    if(!context.Initailize({4, 5}, 1080.0, 1080.0, true, "Parmetric Plotter with SGV3D!"))
+    SGVGraphics sgv;
+    if(!sgv.Initailize(1080.0, 1080.0, true))
     {
         std::cerr<<"Failed to Initialize GLFWContext!"<<std::endl;
         ERROR("Failed to Initialize GLFWContext!");
@@ -92,12 +87,12 @@ int main (int argc, char** argv)
 
     //Create a new shader program
     GLProgram program;
-    context.GetNewProgram(program, "../Shaders/basic2d_vert.glsl", "../Shaders/basic2d_frag.glsl", (SGV_POSITION | SGV_COLOR));
-    context.BindProgram(program);
+    sgv.GetNewProgram(program, "../Shaders/basic2d_vert.glsl", "../Shaders/basic2d_frag.glsl", (SGV_POSITION | SGV_COLOR));
+    sgv.BindProgram(program);
 
     //Set root scene graph node
     GroupNode* root{new GroupNode};
-    context.SetRoot(root);
+    sgv.SetRoot(root);
 
     //Set polar plot step and number of flower petals
     double step{0.01};
@@ -132,6 +127,6 @@ int main (int argc, char** argv)
     //Continuously render opengl 
     for(;;)
     {
-        context.Render(program.Strip(), {0.0f, 0.3f, 0.0f, 1.0f});
+        sgv.Render(program.Strip(), {0.0f, 0.3f, 0.0f, 1.0f});
     }
 }

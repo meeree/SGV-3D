@@ -1,3 +1,6 @@
+#ifndef  __GRAPHICS_INTERNAL_H__
+#define  __GRAPHICS_INTERNAL_H__
+
 #include "base.h"
 #include <GLFW/glfw3.h>
 
@@ -35,9 +38,6 @@ public:
     inline void SetProjection (float const& fov, float const& aspectRatio, float const& near, float const& far) {m_projection = glm::perspective(fov, aspectRatio, near, far);}
     inline glm::vec3 GetPosition  () const {return m_pos;} 
     inline glm::vec3 GetDirection () const {return m_dir;}
-
-    inline void DisableCursor () const {
-    };
 };
 
 class FreeRoamCamera : public BasicCamera 
@@ -124,21 +124,29 @@ public:
     bool BindProgram (StrippedGLProgram const& program);
 
     inline BasicCamera* Camera () {return m_camera;}
+    inline void SetCamera (BasicCamera* camera) {m_camera = camera;}
     inline GLInfo& Info () {return m_info;}
     inline GLuint LookupUniform (std::string const& uniform) const {return m_info.LookupUniform(uniform);}
 };
 
-class Node;
+class GLGraphicsManager 
+{
+private:
+    std::vector<GLContext*> m_contexts;
+
+public:
+    GLGraphicsManager () {DEBUG_MSG("Constructed GLGraphicsManager");}
+
+    inline void AttachContext (GLContext* context) {m_contexts.push_back(context);}
+};
 
 class GLFWContext : public GLContext
 {
-private:
+protected:
     GLFWkeyfun m_keyCallback;
     GLFWmousebuttonfun m_mouseButtonCallback;
     GLFWwindow* m_window;
-    Node* m_root;
 
-public:
     GLFWContext ();
     virtual ~GLFWContext () override {glfwDestroyWindow(m_window);}
 
@@ -148,22 +156,10 @@ public:
                      std::string const& title="Untitled Window",
                      GLFWkeyfun const& keyCallback=nullptr, GLFWmousebuttonfun const& mouseButtonCallback=nullptr);
 
-    void performTransforms ();
+    void performTransforms (); //IMPROVE ME 
 
-    virtual bool Render (StrippedGLProgram const& program, GLfloat const (&color)[4]={0.0f,0.0f,0.0f,1.0f}) override;
-
-    inline void SetCamera (BasicCamera* camera) {m_camera = camera;}
-    inline void SetRoot (Node* root) {m_root = root;}
+    virtual bool Render (StrippedGLProgram const& program, GLfloat const (&color)[4]) override = 0;
     void DisableCursor () const;
 };
 
-class GLGraphicsManager 
-{
-private:
-    std::vector<GLContext*> m_contexts;
-
-public:
-    GLGraphicsManager () {DEBUG_MSG("Initialized GLGraphicsManager");}
-
-    inline void AttachContext (GLContext* context) {m_contexts.push_back(context);}
-};
+#endif //__GRAPHICS_INTERNAL_H__
