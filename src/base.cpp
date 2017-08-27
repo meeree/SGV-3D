@@ -42,7 +42,7 @@ GLuint CompileShader (const char* fname, GLenum const& shaderType)
     } 
 	else 
 	{
-        ERROR("Unable to open %s", fname);
+        ERROR("Unable to open \"%s\"", fname);
         return (GLuint)-1;
     }
 

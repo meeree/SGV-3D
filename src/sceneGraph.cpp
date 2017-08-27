@@ -7,23 +7,23 @@
  
 // GET RUNTIME OPTIONS INCORPORATED !!
 
-int StaticVars::uniLookupSafe (std::string const& key, GLint const& shdr) const
-{
-    GLint loc;
-    try 
-    {
-        loc = uniformMap.at(key);
-        if (loc == -1) {throw std::out_of_range("");} //Throw so that both of these cases are caught.
-    }
-    catch(std::out_of_range) 
-    {
-        if (shdr==-1)
-            ERROR("Lookup of variable \"%s\" in unspecified shader failed", key.c_str());
-        else 
-            ERROR("Lookup of variable \"%s\" in shader %i failed", key.c_str(), shdr);
-    }
-    return loc;
-}
+//int StaticVars::uniLookupSafe (std::string const& key, GLint const& shdr) const
+//{
+//    GLint loc;
+//    try 
+//    {
+//        loc = uniformMap.at(key);
+//        if (loc == -1) {throw std::out_of_range("");} //Throw so that both of these cases are caught.
+//    }
+//    catch(std::out_of_range) 
+//    {
+//        if (shdr==-1)
+//            ERROR("Lookup of variable \"%s\" in unspecified shader failed", key.c_str());
+//        else 
+//            ERROR("Lookup of variable \"%s\" in shader %i failed", key.c_str(), shdr);
+//    }
+//    return loc;
+//}
 
 GroupNode::GroupNode (std::vector<Node*> const& children, eGroupType type) 
     : m_children{children}, m_groupType(type), Node(eNodeType::GROUP) {}
@@ -47,12 +47,7 @@ void GroupNode::render (RenderContext* rc)
 
 void GeometryNode::render (RenderContext* rc)
 {
-    //Performing this check every time is quite redundent and unecessary 
-
-//    RuntimeOptions& ro{RuntimeOptions::Get()};
-//    int matLoc{rc->globals.uniLookupSafe(ro.GetString(OptionsEnum::UNI_MODEL_MATRIX), rc->glContext.shader)};
-    GLint matLoc{2};
-    glUniformMatrix4fv(matLoc, 1, GL_FALSE, glm::value_ptr(rc->matStack.top()));
+    glUniformMatrix4fv(rc->globals.modelLoc, 1, GL_FALSE, glm::value_ptr(rc->matStack.top()));
     Indexer indexer{m_graphMesh.GetSigIndexer()};
     if (m_graphMesh.UsesIndices()) //Handle errors with glGetError here??
         glDrawElements(m_graphMesh.GetPrimType(), indexer.Count(), 

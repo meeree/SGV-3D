@@ -1,0 +1,8 @@
+[1  ](DEBUG         ) main()                   animated_polar_flower.cpp     77   Beginning main loop                                                                                                             
+[1  ](DEBUG         ) GLFWContext()            graphics_internal.cpp         85   Constructed GLFWContext                                                                                                         
+[1  ](DEBUG         ) SGVGraphics()            sgv_graphics.h                32   Construct SGVGraphics                                                                                                           
+[1  ](DEBUG         ) Initailize()             graphics_internal.cpp         95   Initializing GLFWContext "SGV3D Version 1.5"; window width 1080.0, height 1080.0; for OpenGL v.4.5                              
+[1  ](DEBUG         ) Initailize()             graphics_internal.cpp         143  Successfully initialized GLFWContext                                                                                            
+[1  ](DEBUG         ) CacheUniforms()          graphics_internal.cpp         11   Beginning to cache uniforms for current shader program                                                                          
+[1  ](DEBUG         ) CacheUniforms()          graphics_internal.cpp         33   Cached uniform "model" to location 2                                                                                            
+[1  ](DEBUG         ) SaveImportantUniforms()  sgv_graphics.cpp              24   Stored model matrix shader location as 2                                                                                        

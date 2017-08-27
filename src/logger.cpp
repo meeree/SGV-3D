@@ -55,14 +55,18 @@ bool Logger::log (char const* fileName, char const* func, int const& line, Logge
     mLogFile.width(3); 
     mLogFile<<std::left<<cnt<<"]";
 
-    mLogFile.width(10); 
+    mLogFile.width(15); 
     mLogFile<<"("+codeToString(code)<<") ";
 
-    mLogFile.width(15);
+    mLogFile.width(25);
     mLogFile<<std::string(func)+"()";
     
-    mLogFile.width(25);
-    mLogFile<<std::string(fileName);
+    mLogFile.width(30);
+    std::string fileNameStr{fileName};
+    fileNameStr.erase(0, fileNameStr.find_last_of('/'));
+    if(fileNameStr[0] == '/')
+        fileNameStr.erase(0, 1);
+    mLogFile<<fileNameStr;
         
     mLogFile.width(5);
     mLogFile<<line;

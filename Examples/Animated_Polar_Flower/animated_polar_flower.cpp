@@ -9,9 +9,9 @@
 
 
 //Includes
-#include "../src/runtimeOptions.h"
-#include "../src/sgv_graphics.h"
-#include "../src/sceneGraph.h"
+#include "../../src/runtimeOptions.h"
+#include "../../src/sgv_graphics.h"
+#include "../../src/sceneGraph.h"
 
 #include <cstdlib>
 #include <algorithm>
@@ -76,7 +76,7 @@ int main (int argc, char** argv)
     }
     DEBUG_MSG("Beginning main loop");
 
-    //Initalize our GLFWcontext with version, window width and height, title, etc.
+    //Initalize our SGVGraphics with window width and height and true to initialize GLEW
     SGVGraphics sgv;
     if(!sgv.Initailize(1080.0, 1080.0, true))
     {
@@ -87,7 +87,7 @@ int main (int argc, char** argv)
 
     //Create a new shader program
     GLProgram program;
-    sgv.GetNewProgram(program, "../Shaders/basic2d_vert.glsl", "../Shaders/basic2d_frag.glsl", (SGV_POSITION | SGV_COLOR));
+    sgv.GetNewProgram(program, "../../Shaders/basic2d_vert.glsl", "../../Shaders/basic2d_frag.glsl", (SGV_POSITION | SGV_COLOR));
     sgv.BindProgram(program);
 
     //Set root scene graph node

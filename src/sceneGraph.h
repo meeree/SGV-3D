@@ -13,11 +13,8 @@
  **************************/
 struct StaticVars 
 {
-    std::unordered_map<std::string, GLint> uniformMap;
+    GLint modelLoc;
     double t;
-
-    ///\brief Safe method for looking up uniforms that reports any errors to the logger
-    int uniLookupSafe (std::string const&, GLint const& shdr=-1) const; 
 }; 
 
 /***********************//**

@@ -162,7 +162,7 @@ int main (int argc, char** argv)
     CustomAnimationNode::ms_wavStream.open(argv[1]);
     CustomAnimationNode2::ms_wavStream.open(argv[1]);
 
-    std::vector<Vertex> mesh = {
+    std::vector<Vertex> mesh{
 //        {{-1.0f, -1.0f, -1.0f}, {-1.0f,  0.0f,  0.0f}},
 //        {{-1.0f, -1.0f,  1.0f}, {-1.0f,  0.0f,  0.0f}},
 //        {{-1.0f,  1.0f,  1.0f}, {-1.0f,  0.0f,  0.0f}},

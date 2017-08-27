@@ -1,0 +1,11 @@
+[1  ](DEBUG    ) main()         ../basic3d.cpp           38   Beginning main loop                                                                                                             
+[1  ](DEBUG    ) GLFWContext()  ../../../src/graphics_internal.cpp84   Constructed GLFWContext                                                                                                         
+[1  ](DEBUG    ) SGVGraphics()  ../../../src/sgv_graphics.h32   Construct SGVGraphics                                                                                                           
+[1  ](DEBUG    ) Initailize()   ../../../src/graphics_internal.cpp94   Initializing GLFWContext "SGV3D Version 1.5"; window width 1920.0, height 1080.0; for OpenGL v.4.5                              
+[1  ](DEBUG    ) Initailize()   ../../../src/graphics_internal.cpp142  Successfully initialized GLFWContext                                                                                            
+[1  ](DEBUG    ) CacheUniforms()../../../src/graphics_internal.cpp11   Beginning to cache uniforms for current shader program                                                                          
+[1  ](DEBUG    ) CacheUniforms()../../../src/graphics_internal.cpp32   Cached uniform "camPos" to location 7                                                                                           
+[2  ](DEBUG    ) CacheUniforms()../../../src/graphics_internal.cpp32   Cached uniform "model" to location 5                                                                                            
+[3  ](DEBUG    ) CacheUniforms()../../../src/graphics_internal.cpp32   Cached uniform "projection" to location 3                                                                                       
+[4  ](DEBUG    ) CacheUniforms()../../../src/graphics_internal.cpp32   Cached uniform "scalar" to location 6                                                                                           
+[5  ](DEBUG    ) CacheUniforms()../../../src/graphics_internal.cpp32   Cached uniform "view" to location 4                                                                                             

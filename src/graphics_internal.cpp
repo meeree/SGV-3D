@@ -29,34 +29,9 @@ void GLUniformCache::CacheUniforms (GLuint const& shader)
       std::string name(nameBuff.data(), nameBuff.size() - 1);
 
       GLint loc{glGetUniformLocation(shader, name.c_str())};
+      m_layout[name] = loc;
       DEBUG_MSG("Cached uniform \"%s\" to location %i", name.c_str(), loc);
     }
-}
-
-void BasicCamera::UpdateView (glm::vec3 const& upVec)
-{
-    m_view = glm::lookAt(m_pos, m_pos+m_dir, upVec);
-}
-
-void BasicCamera::UpdateUniforms (GLint const& posIdx, GLint const& dirIdx, GLint const& projIdx, GLint const& viewIdx)
-{
-    glUniform3fv(posIdx, 1, glm::value_ptr(m_pos));
-    glUniform3fv(dirIdx, 1, glm::value_ptr(m_dir));
-    glUniformMatrix4fv(projIdx, 1, GL_FALSE, glm::value_ptr(m_projection));
-    glUniformMatrix4fv(viewIdx, 1, GL_FALSE, glm::value_ptr(m_view));
-}
-
-void FreeRoamCamera::Update (glm::vec2 const& scaledMouse, glm::vec3 const& moveVec, float const& dt) 
-{
-    m_theta += dt * scaledMouse;
-    glm::mat3x3 rotMat = glm::mat3x3({cos(m_theta[0]), 0.0f, -sin(m_theta[0])}, {0.0f, 1.0f, 0.0f}, {sin(m_theta[0]), 0.0f, cos(m_theta[0])})
-                        *glm::mat3x3({1.0f, 0.0f, 0.0f}, {0.0f, cos(m_theta[1]), sin(m_theta[1])}, {0.0f, -sin(m_theta[1]), cos(m_theta[1])});
-
-    Look(rotMat * glm::vec3(0.0f, 0.0f, 1.0f));
-    glm::vec3 up = rotMat * glm::vec3(0.0f, 1.0f, 0.0f);
-    UpdateView(up);
-
-    Move(moveVec);
 }
 
 void GLInfo::CacheProgram (StrippedGLProgram const& program) 
@@ -91,11 +66,13 @@ bool GLContext::BindProgram (GLProgram const& program)
 
 bool GLContext::BindProgram (StrippedGLProgram const& program)
 {
-    glUseProgram(program.Shader());
-    
     if(m_info.SetProgram(program))
     {
+        glUseProgram(program.Shader());
         glBindVertexArray(program.Vao()); 
+        
+        SaveImportantUniforms();
+
         return true;
     }
 
@@ -166,18 +143,6 @@ bool GLFWContext::Initailize (GLint const (&version)[2],
     DEBUG_MSG("Successfully initialized GLFWContext");
 
     return true;
-}
-
-void GLFWContext::performTransforms ()
-{
-    double t = glfwGetTime();
-    double xpos, ypos;
-    glfwGetCursorPos(m_window, &xpos, &ypos);
-    glfwSetCursorPos(m_window, m_info.Width()/2, m_info.Height()/2);
-    glm::vec2 scaledMouse{m_info.Width()/2-xpos, m_info.Height()/ypos};
-
-    glm::vec3 moveVec(0.0f);
-	static_cast<FreeRoamCamera*>(m_camera)->Update(scaledMouse, moveVec, glfwGetTime() - t);
 }
 
 void GLFWContext::DisableCursor () const

@@ -14,6 +14,10 @@
 #define SGV_COLOR    4
 #define SGV_INDEX    8
 
+#define X_VEC glm::vec3(1.0f,0.0f,0.0f)
+#define Y_VEC glm::vec3(0.0f,1.0f,0.0f)
+#define Z_VEC glm::vec3(0.0f,0.0f,1.0f)
+
 //THIS IS A VERY IMPORTANT GLOBAL VARIABLE: IT TELLS US IF AN OPENGL CONTEXT HAS BEEN CREATED!
 extern bool g_GLContextCreated;
 

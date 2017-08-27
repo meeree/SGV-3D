@@ -7,50 +7,6 @@
 #include <unordered_map>
 #include <string>
 
-#include <glm/gtc/matrix_transform.hpp>
-
-//URGENT: HOW TO SWITCH SHADERS?
-
-//TODO: Add multi-context support
-
-//Perhaps have camera running on seperate thread??
-class BasicCamera
-{
-protected:
-    glm::vec3 m_pos, m_dir;
-    glm::mat4x4 m_projection, m_view;
-
-    float m_lookSpeed, m_moveSpeed;
-
-    ///\brief Update view matrix using upVec 
-    ///\param [in] upVec Vector pointing upwards from camera
-    void UpdateView (glm::vec3 const& upVec={0.0f,1.0f,0.0f});
-
-public:
-    BasicCamera (float const& lookSpeed=1.0f, float const& moveSpeed=1.0f) : m_pos(0.0f), m_dir(0.0f), m_projection(1.0f), m_view(1.0f), m_lookSpeed{lookSpeed}, m_moveSpeed{moveSpeed} {}
-
-    void UpdateUniforms (GLint const& posIdx, GLint const& dirIdx, GLint const& projIdx, GLint const& viewIdx);
-
-    inline void SetPosition  (glm::vec3 const& pos) {m_pos = pos;} 
-    inline void SetDirection (glm::vec3 const& dir) {m_dir = dir;}
-    inline void Look (glm::vec3 const& lookVec) {m_dir += m_lookSpeed*lookVec;} 
-    inline void Move (glm::vec3 const& moveVec) {m_pos += m_moveSpeed*moveVec;}
-    inline void SetProjection (float const& fov, float const& aspectRatio, float const& near, float const& far) {m_projection = glm::perspective(fov, aspectRatio, near, far);}
-    inline glm::vec3 GetPosition  () const {return m_pos;} 
-    inline glm::vec3 GetDirection () const {return m_dir;}
-};
-
-class FreeRoamCamera : public BasicCamera 
-{
-private:
-    glm::vec2 m_theta;
-
-public:
-    FreeRoamCamera (float const& lookSpeed=1.0f, float const& moveSpeed=1.0f) : m_theta{0.0f}, BasicCamera(lookSpeed, moveSpeed) {}
-    
-    void Update (glm::vec2 const& scaledMouse, glm::vec3 const& moveVec, float const& dt);
-};
-
 class GLUniformCache 
 {
 private:
@@ -66,8 +22,6 @@ public:
     ///\brief Lookup uniform index 
     inline GLint Lookup (std::string const& uniform) {return m_layout[uniform];}
 };
-
-#include <iostream>
 
 class GLInfo 
 {
@@ -110,11 +64,13 @@ public:
 class GLContext
 {
 protected:
-    GLContext () : m_camera{nullptr} {g_GLContextCreated = true;}
+    GLContext () : m_done{false} {g_GLContextCreated = true;}
     virtual ~GLContext () {}
 
+    virtual void SaveImportantUniforms () = 0;
+
+    bool m_done; 
     GLInfo m_info;
-    BasicCamera* m_camera;
 
 public:
     virtual bool Render (StrippedGLProgram const& program, GLfloat const (&color)[4]) = 0;
@@ -123,10 +79,9 @@ public:
     bool BindProgram (GLProgram const& program);
     bool BindProgram (StrippedGLProgram const& program);
 
-    inline BasicCamera* Camera () {return m_camera;}
-    inline void SetCamera (BasicCamera* camera) {m_camera = camera;}
     inline GLInfo& Info () {return m_info;}
     inline GLuint LookupUniform (std::string const& uniform) const {return m_info.LookupUniform(uniform);}
+    inline void Done () {m_done = true;} 
 };
 
 class GLGraphicsManager 
@@ -156,9 +111,7 @@ protected:
                      std::string const& title="Untitled Window",
                      GLFWkeyfun const& keyCallback=nullptr, GLFWmousebuttonfun const& mouseButtonCallback=nullptr);
 
-    void performTransforms (); //IMPROVE ME 
-
-    virtual bool Render (StrippedGLProgram const& program, GLfloat const (&color)[4]) override = 0;
+public:
     void DisableCursor () const;
 };
 
